@@ -1,11 +1,11 @@
-# Everything in the repo
-* @malakhamshary13 @David-Amir-18
+# Default
+* @malakhamshary13 
 
-# Frontend folder
-/frontend/ @
+# UI components
+/src/components/ @David-Amir-18
 
-# Backend folder
-/backend/ @
+# Pages
+/src/pages/ @David-Amir-18
 
-# Specific file
-package.json @
+# Styling
+/src/styles/ @David-Amir-18
