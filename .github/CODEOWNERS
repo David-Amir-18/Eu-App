@@ -1,11 +1,18 @@
-# Default
-* @malakhamshary13 
+# Default fallback (only when no rule matches)
+* @malakhamshary13
 
 # UI components
 /src/components/ @David-Amir-18
 
-# Pages
+# Pages (screens)
 /src/pages/ @David-Amir-18
 
-# Styling
+# Styling / UI system
 /src/styles/ @David-Amir-18
+
+# Shared frontend logic (API calls, hooks, utils)
+/src/services/ @David-Amir-18 @malakhamshary13
+/src/hooks/ @David-Amir-18 @malakhamshary13
+
+# App-level configuration
+/src/ @malakhamshary13
