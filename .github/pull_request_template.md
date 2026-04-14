@@ -5,6 +5,7 @@ Briefly describe what this PR does.
 
 ## Related Jira Ticket
 Link or ID:
+
 Example: EU-12
 
 ---
