@@ -62,7 +62,6 @@ src/
 ├── hooks/
 └── utils/
 
-
 ---
 
 ## Branching Strategy
