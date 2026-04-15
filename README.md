@@ -67,7 +67,9 @@ src/
 
 ## Branching Strategy
 - `main` → production-ready code
+  
 - `dev` → integration branch
+  
 - `feature/*` → individual features
 
 Example:
@@ -80,7 +82,9 @@ feature/EU-12-meal-scheduling-ui
 ## Scripts
 
 npm run dev # Start development server
+
 npm run build # Build for production
+
 npm run preview # Preview production build
 
 
