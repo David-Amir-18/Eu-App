@@ -110,6 +110,7 @@ function App() {
             </li>
           </ul>
         </div>
+        <div className='bg-primary-400 text-neutral-white p-4 w-full'>Hello there!</div>
       </section>
 
       <div className="ticks"></div>
