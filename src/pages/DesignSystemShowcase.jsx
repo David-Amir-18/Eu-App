@@ -315,7 +315,7 @@ function DesignSystemShowcase() {
                 />
                 <p className="text-text-error text-body-sm mt-2">Password is required</p>
               </div>
-              <div>
+              <div >
                 <label className="block text-text-body text-body-sm font-(weight-semibold) mb-2">Disabled Input</label>
                 <input
                   type="text"
