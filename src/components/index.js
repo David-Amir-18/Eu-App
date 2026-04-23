@@ -11,3 +11,9 @@ export { DefinedField } from './molecules/DefinedField'
 export { MenuItem } from './molecules/MenuItem'
 export { Menu } from './molecules/Menu'
 export { DatePicker } from './molecules/DatePicker'
+export { PlanCard } from './molecules/PlanCard'
+
+// Organisms
+export { NavBar } from './organisms/NavBar'
+export { DashboardSidebar } from './organisms/DashboardSidebar'
+export { MealTabBar } from './organisms/MealTabBar'
