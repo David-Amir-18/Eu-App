@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Field } from '../components/atoms/Field'
 import { Button } from '../components/atoms/Button'
-import { login } from '../services/authService'
+import { login } from '../api/authService'
 
 export default function LoginPage() {
   const [username, setUsername] = useState('')
