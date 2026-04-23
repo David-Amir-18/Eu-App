@@ -1,9 +1,11 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import AppLayout from './layouts/AppLayout.jsx'
+import DashboardLayout from './layouts/DashboardLayout.jsx'
 import Home from './pages/Home.jsx'
 import LoginPage from './pages/LoginPage.jsx'
 import RegisterPage from './pages/RegisterPage.jsx'
 import OnboardingPage from './pages/OnboardingPage.jsx'
+import DashboardPage from './pages/DashboardPage.jsx'
 
 function App() {
   return (
@@ -12,7 +14,10 @@ function App() {
         
         <Route element={<AppLayout />}>
           <Route index element={<Home />} />
-          <Route path="/contact" element={<Contact />} />
+        </Route>
+
+        <Route element={<DashboardLayout />}>
+          <Route path="/dashboard" element={<DashboardPage />} />
         </Route>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />

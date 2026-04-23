@@ -94,7 +94,7 @@ export default function OnboardingPage() {
 
   function finish() {
     // TODO: send form data to backend when endpoint is ready
-    navigate('/')
+    navigate('/dashboard')
   }
 
   return (
