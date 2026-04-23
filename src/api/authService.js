@@ -37,3 +37,21 @@ export async function getMe(token) {
   if (!res.ok) throw new Error(data.detail || 'Unauthorized')
   return data // { id, username, email }
 }
+
+export async function getUserMetrics(userId) {
+  const res = await fetch(`${import.meta.env.VITE_API_URL}/auth/user-metrics?user_id=${userId}`)
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.detail || 'Failed to fetch metrics')
+  return data
+}
+
+export async function saveUserMetrics(userId, metrics) {
+  const res = await fetch(`${import.meta.env.VITE_API_URL}/auth/user-metrics?user_id=${userId}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(metrics),
+  })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.detail || 'Failed to save metrics')
+  return data
+}

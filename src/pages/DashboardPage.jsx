@@ -1,12 +1,13 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { MealTabBar } from '../components/organisms/MealTabBar.jsx'
 import { PlanCard } from '../components/molecules/PlanCard.jsx'
 import { Button } from '../components/atoms/Button.jsx'
 import { cn } from '../components/utils.js'
+import { getUserMetrics } from '../api/authService.js'
 
 // ── Mock user ──────────────────────────────────────────────────────────────────
-const USER_NAME = 'Alex'
+// username and user_id come from localStorage after login/register
 
 // ── Mock plans ─────────────────────────────────────────────────────────────────
 const PLANS = [
@@ -212,10 +213,69 @@ function WeekCalendar({ today }) {
   )
 }
 
+// ── Health stats bar ───────────────────────────────────────────────────────────
+function HealthStatsBar({ profile, loading }) {
+  if (loading) {
+    return (
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[1,2,3,4].map(i => (
+          <div key={i} className="bg-neutral-100 rounded-xl p-4 animate-pulse h-20" />
+        ))}
+      </div>
+    )
+  }
+  if (!profile) return null
+
+  const bmi = profile.Weight && profile.Height
+    ? (parseFloat(profile.Weight) / Math.pow(parseFloat(profile.Height) / 100, 2)).toFixed(1)
+    : '—'
+
+  const stats = [
+    { label: 'Weight', value: profile.Weight ? `${parseFloat(profile.Weight)} kg` : '—' },
+    { label: 'Height', value: profile.Height ? `${parseFloat(profile.Height)} cm` : '—' },
+    { label: 'BMI', value: bmi },
+    { label: 'Goal', value: profile.PrimaryGoal?.replace(/([A-Z])/g, ' $1').trim() ?? '—' },
+    { label: 'Fitness Level', value: profile.FitnessLevel ?? '—' },
+    { label: 'Activity', value: profile.ActivityLevel?.replace(/([A-Z])/g, ' $1').trim() ?? '—' },
+    { label: 'Streak', value: profile.CurrentStreak != null ? `${profile.CurrentStreak} days` : '—' },
+    { label: 'Calorie Target', value: profile.DailyCalorieTarget ? `${profile.DailyCalorieTarget} kcal` : '—' },
+  ]
+
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      {stats.map(({ label, value }) => (
+        <div key={label} className="bg-neutral-100 rounded-xl p-4 flex flex-col gap-1 border border-border-primary">
+          <span className="text-body-sm text-text-disabled font-semibold">{label}</span>
+          <span className="text-body-lg font-bold text-text-headings">{value}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // ── Main page ──────────────────────────────────────────────────────────────────
 export default function DashboardPage() {
   const [mealTab, setMealTab] = useState('today')
   const today = useMemo(() => new Date(), [])
+  const [profile, setProfile] = useState(null)
+  const [profileLoading, setProfileLoading] = useState(true)
+
+  const userId = localStorage.getItem('user_id')
+  const username = localStorage.getItem('username') || 'there'
+
+  useEffect(() => {
+    if (!userId) { setProfileLoading(false); return }
+    getUserMetrics(userId)
+      .then(data => {
+        console.log('Health profile response:', data)
+        setProfile(data)
+      })
+      .catch(err => {
+        console.error('Health profile error:', err.message)
+        setProfile(null)
+      })
+      .finally(() => setProfileLoading(false))
+  }, [userId])
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -227,11 +287,29 @@ export default function DashboardPage() {
 
         {/* Greeting */}
         <h1 className="text-heading-h4 font-bold text-text-headings leading-tight">
-          {getGreeting()}, {USER_NAME}!{' '}
+          {getGreeting()}, {username}!{' '}
           <span className="font-regular text-text-body text-heading-h5">
             Here&apos;s how you&apos;re doing today.
           </span>
         </h1>
+
+        {/* Health profile stats */}
+        {(profileLoading || profile) && (
+          <section aria-label="Health profile">
+            <h2 className="text-heading-h5 font-bold text-text-headings mb-4">Your Health Profile</h2>
+            <HealthStatsBar profile={profile} loading={profileLoading} />
+          </section>
+        )}
+        {!profileLoading && !profile && (
+          <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-surface-warning border border-border-warning">
+            <p className="text-body-sm text-text-body">
+              No health profile found.{' '}
+              <Link to="/onboarding" className="text-text-action font-semibold hover:text-text-action-hover">
+                Complete your profile
+              </Link>
+            </p>
+          </div>
+        )}
 
         {/* Calendar */}
         <section aria-label="Weekly schedule">
