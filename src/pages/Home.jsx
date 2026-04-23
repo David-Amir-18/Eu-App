@@ -246,9 +246,9 @@ export default function Home() {
     <p className="text-body-md text-text-body">
       Reach out to our support team anytime.
     </p>
-  <Button variant="primary" size="md">
-    Contact
-  </Button>
+  <Button variant="primary" size="md" onClick={() => navigate('/contact')}>
+  Contact
+</Button>
 
   </div>
 

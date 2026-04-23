@@ -1,6 +1,8 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import AppLayout from './layouts/AppLayout.jsx'
 import Home from './pages/Home.jsx'
+import Contact from './pages/Contact'
+
 
 function App() {
   return (
@@ -8,6 +10,7 @@ function App() {
       <Routes>
         <Route element={<AppLayout />}>
           <Route index element={<Home />} />
+          <Route path="/contact" element={<Contact />} />
         </Route>
       </Routes>
     </BrowserRouter>
