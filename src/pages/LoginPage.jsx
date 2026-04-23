@@ -19,7 +19,7 @@ export default function LoginPage() {
     try {
       const data = await login(username, password)
       localStorage.setItem('token', data.access_token)
-      window.location.href = '/'
+      window.location.href = '/dashboard'
     } catch (err) {
       setError(err.message || 'Something went wrong. Please try again.')
     } finally {
