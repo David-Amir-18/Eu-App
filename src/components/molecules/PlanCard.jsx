@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { cn } from '../utils.js'
 import { Button } from '../atoms/Button'
 
@@ -113,6 +114,11 @@ export function PlanCard({
         {/* CTAs */}
         <div className="flex gap-2 mt-1">
           <Button variant="outline" size="sm">View Plan</Button>
+          {activeTab === 'Workout' && (
+            <Link to="/dashboard?tab=workouts">
+              <Button variant="outline" size="sm">Recommendations</Button>
+            </Link>
+          )}
           <Button size="sm">{ctaLabel}</Button>
         </div>
       </div>

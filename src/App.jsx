@@ -6,6 +6,7 @@ import LoginPage from './pages/LoginPage.jsx'
 import RegisterPage from './pages/RegisterPage.jsx'
 import OnboardingPage from './pages/OnboardingPage.jsx'
 import Contact from './pages/Contact.jsx'
+
 import DashboardPage from './pages/DashboardPage.jsx'
 
 
@@ -13,7 +14,7 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        
+
         <Route element={<AppLayout />}>
           <Route index element={<Home />} />
         </Route>
@@ -24,6 +25,7 @@ function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/onboarding" element={<OnboardingPage />} />
+        <Route path="/contact" element={<Contact />} />
 
       </Routes>
     </BrowserRouter>

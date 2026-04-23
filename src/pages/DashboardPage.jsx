@@ -1,6 +1,7 @@
-import { useState, useMemo } from 'react'
-import { Link } from 'react-router-dom'
+import { useState, useMemo, useEffect } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { MealTabBar } from '../components/organisms/MealTabBar.jsx'
+import { WorkoutRecommendationsSection } from '../components/organisms/WorkoutRecommendationsSection.jsx'
 import { PlanCard } from '../components/molecules/PlanCard.jsx'
 import { Button } from '../components/atoms/Button.jsx'
 import { cn } from '../components/utils.js'
@@ -214,54 +215,69 @@ function WeekCalendar({ today }) {
 
 // ── Main page ──────────────────────────────────────────────────────────────────
 export default function DashboardPage() {
-  const [mealTab, setMealTab] = useState('today')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const activeTab = searchParams.get('tab') || 'today'
   const today = useMemo(() => new Date(), [])
+
+  const setActiveTab = (tab) => {
+    setSearchParams({ tab })
+  }
 
   return (
     <div className="flex flex-col min-h-screen">
-      {/* Meal tab bar */}
-      <MealTabBar activeTab={mealTab} onTabChange={setMealTab} />
+      {/* Tab bar */}
+      <MealTabBar activeTab={activeTab} onTabChange={setActiveTab} />
 
       {/* Scrollable content */}
       <div className="flex-1 overflow-auto px-8 py-8 flex flex-col gap-10">
-
-        {/* Greeting */}
-        <h1 className="text-heading-h4 font-bold text-text-headings leading-tight">
-          {getGreeting()}, {USER_NAME}!{' '}
-          <span className="font-regular text-text-body text-heading-h5">
-            Here&apos;s how you&apos;re doing today.
-          </span>
-        </h1>
-
-        {/* Calendar */}
-        <section aria-label="Weekly schedule">
-          <WeekCalendar today={today} />
-        </section>
-
-        {/* Divider */}
-        <div className="h-px bg-border-primary" />
-
-        {/* Your Plans */}
-        <section className="flex flex-col gap-6" aria-label="Your Plans">
-          <h2 className="text-heading-h4 font-bold text-text-headings">Your Plans</h2>
-
-          <div className="flex flex-col gap-4">
-            {PLANS.map((plan) => (
-              <PlanCard key={plan.id} {...plan} />
-            ))}
+        
+        {activeTab === 'workouts' ? (
+          /* WORKOUTS TAB CONTENT */
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <WorkoutRecommendationsSection />
           </div>
+        ) : (
+          /* OVERVIEW / MEALS TAB CONTENT */
+          <div className="flex flex-col gap-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            {/* Greeting */}
+            <h1 className="text-heading-h4 font-bold text-text-headings leading-tight">
+              {getGreeting()}, {USER_NAME}!{' '}
+              <span className="font-regular text-text-body text-heading-h5">
+                Here&apos;s how you&apos;re doing today.
+              </span>
+            </h1>
 
-          {/* Create new plan CTA */}
-          <div className="border border-border-primary border-dashed rounded-lg px-8 py-10 flex flex-col items-center gap-3 bg-neutral-100 hover:bg-surface-action-hover2 transition-colors">
-            <h3 className="text-heading-h6 font-bold text-text-headings">Create a New Plan</h3>
-            <p className="text-body-md text-text-body text-center max-w-sm">
-              Start a new meal, workout, or rehab plan tailored just for you.
-            </p>
-            <Link to="/plans/new" id="create-plan-cta">
-              <Button size="sm" className="mt-1">+ New Plan</Button>
-            </Link>
+            {/* Calendar */}
+            <section aria-label="Weekly schedule">
+              <WeekCalendar today={today} />
+            </section>
+
+            {/* Divider */}
+            <div className="h-px bg-border-primary" />
+
+            {/* Your Plans */}
+            <section className="flex flex-col gap-6" aria-label="Your Plans">
+              <h2 className="text-heading-h4 font-bold text-text-headings">Your Plans</h2>
+
+              <div className="flex flex-col gap-4">
+                {PLANS.map((plan) => (
+                  <PlanCard key={plan.id} {...plan} />
+                ))}
+              </div>
+
+              {/* Create new plan CTA */}
+              <div className="border border-border-primary border-dashed rounded-lg px-8 py-10 flex flex-col items-center gap-3 bg-neutral-100 hover:bg-surface-action-hover2 transition-colors">
+                <h3 className="text-heading-h6 font-bold text-text-headings">Create a New Plan</h3>
+                <p className="text-body-md text-text-body text-center max-w-sm">
+                  Start a new meal, workout, or rehab plan tailored just for you.
+                </p>
+                <Link to="/plans/new" id="create-plan-cta">
+                  <Button size="sm" className="mt-1">+ New Plan</Button>
+                </Link>
+              </div>
+            </section>
           </div>
-        </section>
+        )}
       </div>
     </div>
   )

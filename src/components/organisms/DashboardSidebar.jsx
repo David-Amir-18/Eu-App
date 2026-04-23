@@ -89,7 +89,7 @@ function StatRow({ label, value, max }) {
 // ── Nav items ──────────────────────────────────────────────────────────────────
 const navItems = [
   { to: '/dashboard', label: 'Meals',     icon: <IconMeals />,    end: true },
-  { to: '/workouts',  label: 'Workouts',  icon: <IconWorkouts />, end: false },
+  { to: '/dashboard?tab=workouts',  label: 'Workouts',  icon: <IconWorkouts />, end: false },
   { to: '/profile',   label: 'Profile',   icon: <IconProfile />,  end: false },
   { to: '/settings',  label: 'Settings',  icon: <IconSettings />, end: false },
 ]
