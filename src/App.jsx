@@ -4,6 +4,7 @@ import Home from './pages/Home.jsx'
 import LoginPage from './pages/LoginPage.jsx'
 import RegisterPage from './pages/RegisterPage.jsx'
 import OnboardingPage from './pages/OnboardingPage.jsx'
+import Contact from './pages/Contact.jsx'
 
 function App() {
   return (
