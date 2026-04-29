@@ -1,0 +1,346 @@
+@import "tailwindcss";
+
+@theme {
+  /* ===== COLORS ===== */
+  
+  /* Primary Colors */
+  --color-primary-100: #bfdee0;
+  --color-primary-200: #80bedf;
+  --color-primary-300: #409dce;
+  --color-primary-400: #007cbe;
+  --color-primary-500: #005d8e;
+  --color-primary-600: #003e5f;
+  --color-primary-700: #001f2f;
+  
+  /* Secondary Colors */
+  --color-secondary-100: #e0d9d9;
+  --color-secondary-200: #c2b5b5;
+  --color-secondary-300: #a38f8f;
+  --color-secondary-400: #846a6a;
+  --color-secondary-500: #634f4f;
+  --color-secondary-600: #423535;
+  --color-secondary-700: #211a1a;
+  
+  /* Neutral Colors */
+  --color-neutral-100: #e6e6e8;
+  --color-neutral-200: #ccccd0;
+  --color-neutral-300: #80808a;
+  --color-neutral-400: #666672;
+  --color-neutral-500: #4d4d5b;
+  --color-neutral-600: #333343;
+  --color-neutral-700: #1a1a2c;
+  --color-neutral-white: #ffffff;
+  --color-neutral-black: #000000;
+  
+  /* Success Colors */
+  --color-success-100: #dcfce7;
+  --color-success-200: #b9f8cf;
+  --color-success-300: #7bf1a8;
+  --color-success-400: #05df72;
+  --color-success-500: #31c950;
+  --color-success-600: #2aa63e;
+  --color-success-700: #178236;
+  --color-success-800: #016630;
+  --color-success-900: #0d542b;
+  
+  /* Error Colors */
+  --color-error-100: #ffe2e2;
+  --color-error-200: #ffc9c9;
+  --color-error-300: #ffa2a2;
+  --color-error-400: #ff6467;
+  --color-error-500: #fb2c36;
+  --color-error-600: #e7180b;
+  --color-error-700: #c11007;
+  --color-error-800: #9f0712;
+  --color-error-900: #82181a;
+  
+  /* Warning Colors */
+  --color-warning-100: #fed5bf;
+  --color-warning-200: #ffac80;
+  --color-warning-300: #fe8240;
+  --color-warning-400: #fe5800;
+  --color-warning-500: #be4200;
+  --color-warning-600: #7f2c00;
+  --color-warning-700: #3f1600;
+  
+  /* Information Colors */
+  --color-information-100: #e0efff;
+  --color-information-200: #9ecbff;
+  --color-information-300: #61abff;
+  --color-information-400: #248aff;
+  --color-information-500: #0058bd;
+  --color-information-600: #0051ad;
+  --color-information-700: #00408a;
+  --color-information-800: #002d61;
+  --color-information-900: #001d3d;
+  
+  /* Brand Colors */
+  --color-bright-teal-100: #bfdee0;
+  --color-bright-teal-200: #80bedf;
+  --color-bright-teal-300: #409dce;
+  --color-bright-teal-default: #007cbe;
+  --color-bright-teal-500: #005d8e;
+  --color-bright-teal-600: #003e5f;
+  --color-bright-teal-700: #001f2f;
+  
+  --color-smoky-rose-100: #e0d9d9;
+  --color-smoky-rose-200: #c2b5b5;
+  --color-smoky-rose-300: #a38f8f;
+  --color-smoky-rose-default: #846a6a;
+  --color-smoky-rose-500: #634f4f;
+  --color-smoky-rose-600: #423535;
+  --color-smoky-rose-700: #211a1a;
+  
+  --color-blackberry-100: #d5ccd6;
+  --color-blackberry-200: #ac9aaf;
+  --color-blackberry-300: #826886;
+  --color-blackberry-default: #58355e;
+  --color-blackberry-500: #422846;
+  --color-blackberry-600: #2c1a2f;
+  --color-blackberry-700: #160d17;
+  
+  --color-ash-100: #edf0ea;
+  --color-ash-200: #dce3d7;
+  --color-ash-300: #cbd4c2;
+  --color-ash-default: #8b9482;
+  --color-ash-500: #8b9482;
+  --color-ash-600: #5c6357;
+  --color-ash-700: #2e312b;
+  
+  --color-sandy-flame-100: #fee6d3;
+  --color-sandy-flame-200: #fecfa7;
+  --color-sandy-flame-300: #fdb67b;
+  --color-sandy-flame-default: #fc9e4f;
+  --color-sandy-flame-500: #bd763b;
+  --color-sandy-flame-600: #7e4e27;
+  --color-sandy-flame-700: #3f2714;
+  
+  --color-imperial-blue-100: #c9c9db;
+  --color-imperial-blue-200: #9595b9;
+  --color-imperial-blue-300: #5f5f95;
+  --color-imperial-blue-default: #2a2a72;
+  --color-imperial-blue-500: #1f1f55;
+  --color-imperial-blue-600: #151539;
+  --color-imperial-blue-700: #030307;
+  
+  --color-fern-100: #d4dfd5;
+  --color-fern-200: #abc1ac;
+  --color-fern-300: #80a183;
+  --color-fern-default: #568259;
+  --color-fern-500: #406143;
+  --color-fern-600: #2b412c;
+  --color-fern-700: #152016;
+  
+  --color-custard-100: #f8f4e9;
+  --color-custard-200: #f2ebd3;
+  --color-custard-300: #ebe0bd;
+  --color-custard-default: #e4d6a7;
+  --color-custard-500: #aba07d;
+  --color-custard-600: #726b53;
+  --color-custard-700: #39352a;
+  
+  /* Additional Color Variants */
+  --color-red-100: #ffe2e2;
+  --color-red-200: #ffc9c9;
+  --color-red-300: #ffa2a2;
+  --color-red-400: #ff6467;
+  --color-red-default: #fb2c36;
+  --color-red-600: #e7180b;
+  --color-red-700: #c11007;
+  --color-red-800: #9f0712;
+  --color-red-900: #82181a;
+  
+  --color-green-100: #dcfce7;
+  --color-green-200: #b9f8cf;
+  --color-green-300: #7bf1a8;
+  --color-green-400: #05df72;
+  --color-green-default: #31c950;
+  --color-green-600: #2aa63e;
+  --color-green-700: #178236;
+  --color-green-800: #016630;
+  --color-green-900: #0d542b;
+  
+  --color-blue-100: #e0efff;
+  --color-blue-200: #9ecbff;
+  --color-blue-300: #61abff;
+  --color-blue-default: #248aff;
+  --color-blue-500: #0058bd;
+  --color-blue-600: #0051ad;
+  --color-blue-700: #00408a;
+  --color-blue-800: #002d61;
+  --color-blue-900: #001d3d;
+  
+  --color-grey-100: #e6e6e8;
+  --color-grey-200: #ccccd0;
+  --color-grey-300: #80808a;
+  --color-grey-400: #666672;
+  --color-grey-default: #4d4d5b;
+  --color-grey-600: #333343;
+  --color-grey-700: #1a1a2c;
+  
+  --color-blaze-orange-100: #fed5bf;
+  --color-blaze-orange-200: #ffac80;
+  --color-blaze-orange-300: #fe8240;
+  --color-blaze-orange-default: #fe5800;
+  --color-blaze-orange-500: #be4200;
+  --color-blaze-orange-600: #7f2c00;
+  --color-blaze-orange-700: #3f1600;
+  
+  --color-white: #ffffff;
+  --color-black: #000000;
+  
+  /* Semantic Text Colors */
+  --color-text-headings: #1a1a2c;
+  --color-text-body: #333343;
+  --color-text-action: #007cbe;
+  --color-text-action-hover: #005d8e;
+  --color-text-disabled: #666672;
+  --color-text-success: #31c950;
+  --color-text-error: #fb2c36;
+  --color-text-on-action: #ffffff;
+  --color-text-on-disabled: #000000;
+  
+  /* Surface Colors */
+  --color-surface-page: #ffffff;
+  --color-surface-primary: #ffffff;
+  --color-surface-success: #dcfce7;
+  --color-surface-error: #ffe2e2;
+  --color-surface-disabled: #ccccd0;
+  --color-surface-disabled-selected: #4d4d5b;
+  --color-surface-warning: #fed5bf;
+  --color-surface-action: #007cbe;
+  --color-surface-action-hover: #005d8e;
+  --color-surface-action-hover2: #bfdee0;
+  --color-surface-information: #e0efff;
+  
+  /* Border Colors */
+  --color-border-primary: #ccccd0;
+  --color-border-secondary: #007cbe;
+  --color-border-success: #31c950;
+  --color-border-error: #fb2c36;
+  --color-border-warning: #fe5800;
+  --color-border-information: #248aff;
+  --color-border-disabled: #80808a;
+  --color-border-focus: #007cbe;
+  --color-border-action: #007cbe;
+  --color-border-action-hover: #005d8e;
+  
+  /* Icon Colors */
+  --color-icon-primary: #4d4d5b;
+  --color-icon-information: #248aff;
+  --color-icon-success: #31c950;
+  --color-icon-warning: #fe5800;
+  --color-icon-error: #fb2c36;
+  --color-icon-action: #007cbe;
+  --color-icon-action-hover: #005d8e;
+  --color-icon-on-action: #ffffff;
+  --color-icon-on-disabled: #000000;
+  
+  /* ===== SPACING ===== */
+  --space-3xs: 0.125rem;
+  --space-2xs: 0.25rem;
+  --space-xs: 0.5rem;
+  --space-sm: 0.75rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2rem;
+  --space-2xl: 3rem;
+  --space-3xl: 4rem;
+  
+  /* ===== FONT SIZES ===== */
+  --text-body-sm: 0.9rem;
+  --text-body-sm--line-height: 1.25rem;
+  
+  --text-body-md: 1rem;
+  --text-body-md--line-height: 1.5rem;
+  
+  --text-body-lg: 1.25rem;
+  --text-body-lg--line-height: 2rem;
+  
+  --text-heading-h6: 1.25rem;
+  --text-heading-h6--line-height: 1.5rem;
+  
+  --text-heading-h5: 1.5rem;
+  --text-heading-h5--line-height: 1.75rem;
+  
+  --text-heading-h4: 2rem;
+  --text-heading-h4--line-height: 2.5rem;
+  
+  --text-heading-h3: 2.5rem;
+  --text-heading-h3--line-height: 3rem;
+  
+  --text-heading-h2: 3rem;
+  --text-heading-h2--line-height: 3.5rem;
+  
+  --text-heading-h1: 3.75rem;
+  --text-heading-h1--line-height: 4.5rem;
+  
+  /* ===== PARAGRAPH SPACING ===== */
+  --paragraph-spacing-body-sm: 1rem;
+  --paragraph-spacing-body-md: 1rem;
+  --paragraph-spacing-body-lg: 1.25rem;
+  --paragraph-spacing-heading-h1: 3rem;
+  --paragraph-spacing-heading-h2: 2.5rem;
+  --paragraph-spacing-heading-h3: 2.25rem;
+  --paragraph-spacing-heading-h4: 2rem;
+  --paragraph-spacing-heading-h5: 1.75rem;
+  --paragraph-spacing-heading-h6: 1.5rem;
+  
+  /* ===== FONT FAMILIES ===== */
+  --font-family-heading: "Instrument Serif", serif;
+  --font-family-body: "Inter", system-ui, -apple-system, sans-serif;
+  
+  /* ===== FONT WEIGHTS ===== */
+  --font-weight-light: 300;
+  --font-weight-regular: 400;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  
+  /* ===== BORDER RADIUS ===== */
+  --radius-none: 0rem;
+  --radius-sm: 0.125rem;
+  --radius-md: 0.25rem;
+  --radius-lg: 0.5rem;
+  --radius-round: 3.25rem;
+  
+  /* ===== BORDER WIDTH ===== */
+  --border-width-none: 0rem;
+  --border-width-sm: 0.0625rem;
+  --border-width-md: 0.125rem;
+  --border-width-lg: 0.25rem;
+  
+  /* ===== SCALE (Additional spacing values) ===== */
+  --scale-0: 0rem;
+  --scale-25: 0.0625rem;
+  --scale-50: 0.125rem;
+  --scale-100: 0.25rem;
+  --scale-200: 0.5rem;
+  --scale-300: 0.75rem;
+  --scale-400: 1rem;
+  --scale-500: 1.25rem;
+  --scale-600: 1.5rem;
+  --scale-700: 1.75rem;
+  --scale-800: 2rem;
+  --scale-900: 2.25rem;
+  --scale-1000: 2.5rem;
+  --scale-1100: 2.75rem;
+  --scale-1200: 3rem;
+  --scale-1300: 3.25rem;
+  --scale-1400: 3.5rem;
+  --scale-1500: 3.75rem;
+  --scale-1600: 4rem;
+}
+
+@layer base {
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
