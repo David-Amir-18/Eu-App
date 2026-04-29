@@ -1,5 +1,7 @@
 import { NavLink } from 'react-router-dom'
+import { useEffect, useState } from 'react'
 import { cn } from '../utils.js'
+import { getUserMetrics } from '../../api/authService.js'
 
 // ── Icons ──────────────────────────────────────────────────────────────────────
 function IconMeals() {
@@ -96,8 +98,22 @@ const navItems = [
 
 // ── Component ──────────────────────────────────────────────────────────────────
 export function DashboardSidebar() {
+  const [profile, setProfile] = useState(null)
+  const userId = localStorage.getItem('user_id')
+  const username = localStorage.getItem('username') || 'User'
+
+  useEffect(() => {
+    if (!userId) return
+    getUserMetrics(userId)
+      .then(setProfile)
+      .catch(() => setProfile(null))
+  }, [userId])
+
+  const streak = profile?.CurrentStreak ?? 0
+  const calorieTarget = profile?.DailyCalorieTarget ?? 2000
+
   return (
-    <aside className="w-60 shrink-0 min-h-screen bg-surface-primary border-r border-border-primary flex flex-col">
+    <aside className="fixed top-0 left-0 w-60 h-screen bg-surface-primary border-r border-border-primary flex flex-col overflow-y-auto z-40">
 
       {/* Logo */}
       <div className="flex items-center gap-3 px-5 py-5 border-b border-border-primary">
@@ -110,13 +126,13 @@ export function DashboardSidebar() {
       {/* Streaks */}
       <div className="px-5 py-4 border-b border-border-primary flex flex-col gap-3">
         <p className="text-body-sm font-bold text-text-disabled uppercase tracking-widest">Statistics</p>
-        <StreakBadge label="Meals Streak" count={21} />
-        <StreakBadge label="Workout Streak" count={10} />
+        <StreakBadge label="Meals Streak" count={streak} />
+        <StreakBadge label="Workout Streak" count={streak} />
       </div>
 
       {/* Quick stats */}
       <div className="px-5 py-4 border-b border-border-primary flex flex-col gap-3">
-        <StatRow label="Today's Calories" value={500} max={2100} />
+        <StatRow label="Today's Calories" value={0} max={calorieTarget} />
         <StatRow label="Today's Workout" value={3} max={5} />
       </div>
 
