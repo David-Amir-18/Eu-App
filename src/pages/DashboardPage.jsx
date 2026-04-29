@@ -293,24 +293,6 @@ export default function DashboardPage() {
           </span>
         </h1>
 
-        {/* Health profile stats */}
-        {(profileLoading || profile) && (
-          <section aria-label="Health profile">
-            <h2 className="text-heading-h5 font-bold text-text-headings mb-4">Your Health Profile</h2>
-            <HealthStatsBar profile={profile} loading={profileLoading} />
-          </section>
-        )}
-        {!profileLoading && !profile && (
-          <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-surface-warning border border-border-warning">
-            <p className="text-body-sm text-text-body">
-              No health profile found.{' '}
-              <Link to="/onboarding" className="text-text-action font-semibold hover:text-text-action-hover">
-                Complete your profile
-              </Link>
-            </p>
-          </div>
-        )}
-
         {/* Calendar */}
         <section aria-label="Weekly schedule">
           <WeekCalendar today={today} />

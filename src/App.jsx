@@ -6,6 +6,8 @@ import LoginPage from './pages/LoginPage.jsx'
 import RegisterPage from './pages/RegisterPage.jsx'
 import OnboardingPage from './pages/OnboardingPage.jsx'
 import DashboardPage from './pages/DashboardPage.jsx'
+import Contact from "./pages/Contact.jsx"
+import WorkoutPlanPage from './pages/WorkoutPlanPage.jsx'
 
 function App() {
   return (
@@ -18,6 +20,7 @@ function App() {
 
         <Route element={<DashboardLayout />}>
           <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/plans/workout/:id" element={<WorkoutPlanPage />} />
         </Route>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
