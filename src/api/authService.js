@@ -28,13 +28,15 @@ export async function login(username, password) {
   }
   const res = await fetch(`${API_URL}/auth/login`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body,
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ username, password }),
   })
 
   const data = await res.json()
   if (!res.ok) throw new Error(data.detail || 'Invalid credentials')
-  return data // { access_token, token_type }
+  return data
 }
 
 export async function register(username, email, password) {

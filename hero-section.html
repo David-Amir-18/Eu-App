@@ -1,0 +1,150 @@
+<div id="hero" style="width:100%;height:500px;background:#001f2f;position:relative;overflow:hidden;display:flex;align-items:flex-end;">
+  <div style="position:absolute;inset:0;opacity:0.15;background-image:url('data:image/svg+xml,%3Csvg viewBox=%220 0 256 256%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22n%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.9%22 numOctaves=%224%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23n)%22/%3E%3C/svg%3E');background-size:180px 180px;pointer-events:none;z-index:2;"></div>
+  <canvas id="gc" style="position:absolute;inset:0;width:100%;height:100%;z-index:3;pointer-events:none;display:block;"></canvas>
+
+  <!-- stripes use absolute positioning for overlap/depth -->
+  <div id="sw" style="position:absolute;top:28%;left:50%;width:220%;transform:translate(-50%,0) rotate(38deg);z-index:1;"></div>
+
+  <div style="position:relative;z-index:5;padding:0 0 5% 5%;">
+    <h1 style="font-size:clamp(2rem,4.5vw,3.5rem);font-weight:700;color:#bfdee0;letter-spacing:-0.02em;line-height:1.05;margin:0 0 0.5rem;font-family:'Helvetica Neue',sans-serif;">Chasing Sunsets</h1>
+    <p style="font-size:clamp(0.8rem,1.3vw,1rem);color:#634f4f;line-height:1.5;margin:0;font-family:'Helvetica Neue',sans-serif;">Sunsets are proof that there's beauty in endings.</p>
+  </div>
+</div>
+
+<script>
+(function(){
+  // Each stripe: height, bg, border, zIndex (higher = on top), shadow for depth
+  const stripeData = [
+    {h:8,  offset:0,   z:1,  bg:'rgba(0,20,35,0.15)',    border:'rgba(191,222,224,0.06)', shadow:'none'},
+    {h:11, offset:5,   z:2,  bg:'rgba(0,31,47,0.22)',    border:'rgba(191,222,224,0.10)', shadow:'0 4px 12px rgba(0,0,0,0.4)'},
+    {h:16, offset:9,   z:3,  bg:'rgba(0,62,95,0.28)',    border:'rgba(191,222,224,0.14)', shadow:'0 6px 18px rgba(0,0,0,0.45)'},
+    {h:22, offset:12,  z:4,  bg:'rgba(0,93,142,0.32)',   border:'rgba(128,190,223,0.22)', shadow:'0 8px 24px rgba(0,0,0,0.5)'},
+    {h:16, offset:15,  z:3,  bg:'rgba(0,62,95,0.28)',    border:'rgba(191,222,224,0.18)', shadow:'0 6px 18px rgba(0,0,0,0.4)'},
+    {h:40, offset:17,  z:6,  bg:'rgba(0,124,190,0.28)',  border:'rgba(128,190,223,0.28)', shadow:'0 10px 32px rgba(0,0,0,0.55)'},
+    {h:5,  offset:42,  z:7,  bg:'rgba(191,222,224,0.22)',border:'rgba(191,222,224,0.5)',  shadow:'0 2px 8px rgba(0,0,0,0.3)'},
+    {h:48, offset:40,  z:8,  bg:'rgba(64,157,206,0.25)', border:'rgba(191,222,224,0.30)', shadow:'0 12px 40px rgba(0,0,0,0.6)'},
+    {h:6,  offset:71,  z:9,  bg:'rgba(191,222,224,0.20)',border:'rgba(191,222,224,0.45)', shadow:'0 2px 8px rgba(0,0,0,0.3)'},
+    {h:36, offset:68,  z:7,  bg:'rgba(0,124,190,0.22)',  border:'rgba(128,190,223,0.24)', shadow:'0 8px 28px rgba(0,0,0,0.5)'},
+    {h:22, offset:90,  z:5,  bg:'rgba(0,93,142,0.26)',   border:'rgba(128,190,223,0.18)', shadow:'0 6px 20px rgba(0,0,0,0.45)'},
+    {h:14, offset:98,  z:3,  bg:'rgba(0,62,95,0.24)',    border:'rgba(191,222,224,0.13)', shadow:'0 4px 14px rgba(0,0,0,0.4)'},
+    {h:9,  offset:104, z:2,  bg:'rgba(0,31,47,0.20)',    border:'rgba(191,222,224,0.09)', shadow:'0 3px 10px rgba(0,0,0,0.35)'},
+    {h:6,  offset:108, z:1,  bg:'rgba(0,31,47,0.14)',    border:'rgba(191,222,224,0.06)', shadow:'none'},
+  ];
+
+  const sw = document.getElementById('sw');
+
+  stripeData.forEach(d => {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = `
+      position:absolute;
+      left:0;right:0;
+      top:${d.offset}px;
+      height:${d.h}px;
+      border-radius:5px;
+      z-index:${d.z};
+    `;
+
+    const blur = document.createElement('div');
+    blur.style.cssText = `position:absolute;inset:0;border-radius:5px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);z-index:0;`;
+
+    const face = document.createElement('div');
+    face.style.cssText = `
+      position:absolute;inset:0;border-radius:5px;
+      background:${d.bg};
+      border:0.5px solid ${d.border};
+      box-shadow:${d.shadow},inset 0 1px 0 rgba(191,222,224,0.28),inset 0 -1px 0 rgba(0,0,0,0.2);
+      z-index:1;
+    `;
+
+    const shine = document.createElement('div');
+    shine.style.cssText = `position:absolute;top:0;left:8%;right:8%;height:1px;background:linear-gradient(90deg,transparent,rgba(191,222,224,0.85),transparent);z-index:2;border-radius:1px;`;
+
+    // Bottom shadow strip to fake depth gap between overlapping stripes
+    const depthShadow = document.createElement('div');
+    depthShadow.style.cssText = `position:absolute;bottom:-3px;left:2%;right:2%;height:3px;background:linear-gradient(180deg,rgba(0,0,0,0.35),transparent);z-index:3;border-radius:0 0 4px 4px;`;
+
+    wrap.appendChild(blur);
+    wrap.appendChild(face);
+    wrap.appendChild(shine);
+    wrap.appendChild(depthShadow);
+    sw.appendChild(wrap);
+  });
+
+  // Set wrapper height to contain all stripes
+  const maxBottom = Math.max(...stripeData.map(d => d.offset + d.h));
+  sw.style.height = (maxBottom + 20) + 'px';
+
+  const hero   = document.getElementById('hero');
+  const canvas = document.getElementById('gc');
+  const ctx    = canvas.getContext('2d');
+
+  function resize(){ canvas.width = hero.clientWidth; canvas.height = hero.clientHeight; }
+  resize();
+  window.addEventListener('resize', resize);
+
+  let mx = -9999, my = -9999, cur = 0, tar = 0;
+  function lerp(a,b,t){ return a+(b-a)*t; }
+
+  function getRotatedCorners(el, heroRect) {
+    const r   = el.getBoundingClientRect();
+    const ang = 38 * Math.PI / 180;
+    const cos = Math.cos(ang), sin = Math.sin(ang);
+    const scx = r.left + r.width  / 2;
+    const scy = r.top  + r.height / 2;
+    const hw  = el.offsetWidth  / 2;
+    const hh  = el.offsetHeight / 2;
+    return [[-hw,-hh],[hw,-hh],[hw,hh],[-hw,hh]].map(([lx,ly]) => [
+      scx + lx*cos - ly*sin - heroRect.left,
+      scy + lx*sin + ly*cos - heroRect.top
+    ]);
+  }
+
+  function pointInPoly(px, py, corners) {
+    for(let i=0;i<corners.length;i++){
+      const [ax,ay]=corners[i],[bx,by]=corners[(i+1)%corners.length];
+      if((bx-ax)*(py-ay)-(by-ay)*(px-ax)<0) return false;
+    }
+    return true;
+  }
+
+  function frame(){
+    requestAnimationFrame(frame);
+    const hr  = hero.getBoundingClientRect();
+    const els = Array.from(sw.children);
+    const allCorners = els.map(el => getRotatedCorners(el, hr));
+    const lx  = mx - hr.left;
+    const ly  = my - hr.top;
+    const hit = allCorners.some(c => pointInPoly(lx, ly, c));
+    tar = hit ? 1 : 0;
+    cur = lerp(cur, tar, 0.1);
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if(cur < 0.005) return;
+
+    ctx.save();
+    ctx.beginPath();
+    allCorners.forEach(corners => {
+      ctx.moveTo(corners[0][0],corners[0][1]);
+      corners.slice(1).forEach(([x,y]) => ctx.lineTo(x,y));
+      ctx.closePath();
+    });
+    ctx.clip();
+
+    const g = ctx.createRadialGradient(lx,ly,0,lx,ly,380);
+    g.addColorStop(0,    `rgba(220,240,242,${0.95*cur})`);
+    g.addColorStop(0.12, `rgba(191,222,224,${0.8*cur})`);
+    g.addColorStop(0.3,  `rgba(128,190,223,${0.55*cur})`);
+    g.addColorStop(0.55, `rgba(0,124,190,  ${0.3*cur})`);
+    g.addColorStop(0.8,  `rgba(0,93,142,   ${0.1*cur})`);
+    g.addColorStop(1,    `rgba(0,31,47,    0)`);
+
+    ctx.fillStyle = g;
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.restore();
+  }
+
+  window.addEventListener('mousemove', e=>{ mx=e.clientX; my=e.clientY; });
+  window.addEventListener('mouseleave', ()=>{ mx=-9999; my=-9999; });
+  frame();
+})();
+</script>
