@@ -13,7 +13,7 @@ function IconDiet() {
   return <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 11l19-9-9 19-2-8-8-2z" /></svg>
 }
 function IconRehab() {
-  return <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+  return <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></svg>
 }
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -53,8 +53,8 @@ function ToggleGroup({ options, selected, onChange, activeColor = 'bg-workout-pr
             }}
             className={cn(
               'px-4 py-2 rounded-lg text-body-sm font-semibold transition-colors border',
-              isSelected 
-                ? `${activeColor} text-neutral-white border-transparent` 
+              isSelected
+                ? `${activeColor} text-neutral-white border-transparent`
                 : 'bg-surface-primary border-border-primary text-text-body hover:border-neutral-400'
             )}
           >
@@ -120,10 +120,10 @@ export default function CreatePlanPage() {
   const [pendingType, setPendingType] = useState(null)
 
   // ── Derived Data ──
-  const isDirty = name !== '' || startDate !== null || endDate !== null || 
+  const isDirty = name !== '' || startDate !== null || endDate !== null ||
     (type === 'workout' ? (equipment !== 'Basic Equipment' || workoutDays.length !== 3) :
-     type === 'diet' ? (dietPref !== 'None' || calorieTarget !== '2000' || mealSlots.length !== 3) :
-     (injury !== '' || rehabDays.length !== 4))
+      type === 'diet' ? (dietPref !== 'None' || calorieTarget !== '2000' || mealSlots.length !== 3) :
+        (injury !== '' || rehabDays.length !== 4))
 
   const handleTypeSwitch = (newType) => {
     if (newType === type) return
@@ -132,15 +132,55 @@ export default function CreatePlanPage() {
       setShowSwitchModal(true)
     } else {
       setType(newType)
+      if (newType === 'workout') setLevel('Beginner')
+      if (newType === 'diet') setLevel('General Health')
+      if (newType === 'rehab') setLevel('Phase 1 (Pain Management)')
     }
   }
   const activeDays = type === 'workout' ? workoutDays : type === 'rehab' ? rehabDays : []
   const primaryColorClass = type === 'workout' ? 'workout-prim' : type === 'diet' ? 'meals-prim' : 'rehab-prim'
   const primaryColorHex = type === 'workout' ? 'bg-workout-prim' : type === 'diet' ? 'bg-meals-prim' : 'bg-rehab-prim'
-  
+
+  const getLevelFieldLabel = () => {
+    if (type === 'diet') return 'Diet Focus'
+    if (type === 'rehab') return 'Recovery Phase'
+    return 'Workout Level'
+  }
+
+  const renderLevelOptions = () => {
+    if (type === 'diet') {
+      return (
+        <>
+          <option value="General Health">General Health & Nutrition</option>
+          <option value="Weight Management">Weight Management (Loss/Gain)</option>
+          <option value="Illness Management">Illness Management (e.g., Diabetes, Hypertension)</option>
+          <option value="Athletic Performance">Athletic Performance & Muscle Building</option>
+        </>
+      )
+    }
+    if (type === 'rehab') {
+      return (
+        <>
+          <option value="Phase 1 (Pain Management)">Phase 1 (Acute Recovery & Pain Management)</option>
+          <option value="Phase 2 (Mobility)">Phase 2 (Range of Motion & Mobility)</option>
+          <option value="Phase 3 (Strengthening)">Phase 3 (Strengthening & Stability)</option>
+          <option value="Phase 4 (Return to Sport)">Phase 4 (Functional Return to Activity)</option>
+        </>
+      )
+    }
+    return (
+      <>
+        <option value="Beginner">Beginner</option>
+        <option value="Intermediate">Intermediate</option>
+        <option value="Advanced">Advanced</option>
+        <option value="All Levels">All Levels</option>
+      </>
+    )
+  }
+
   // Calculate duration in weeks purely for display purposes
-  const durationWeeks = (startDate && endDate) 
-    ? Math.max(1, Math.round((endDate - startDate) / (1000 * 60 * 60 * 24 * 7))) 
+  const durationWeeks = (startDate && endDate)
+    ? Math.max(1, Math.round((endDate - startDate) / (1000 * 60 * 60 * 24 * 7)))
     : 0
 
   const handleSave = (status) => {
@@ -151,7 +191,7 @@ export default function CreatePlanPage() {
 
     // Generate an ID
     const planId = name.toLowerCase().replace(/\s+/g, '-') + '-' + Date.now()
-    
+
     // Construct the payload
     const newPlan = {
       id: planId,
@@ -159,8 +199,8 @@ export default function CreatePlanPage() {
       defaultTab: type.charAt(0).toUpperCase() + type.slice(1),
       status: status, // 'draft' | 'active' | 'planned'
       dateRange: `${formatDateShort(startDate)} → ${formatDateShort(endDate)} · ${durationWeeks} weeks`,
-      detail: type === 'diet' 
-        ? `Target: ${calorieTarget} kcal/day · Pref: ${dietPref}`
+      detail: type === 'diet'
+        ? `Daily calorie target: ${calorieTarget} kcal / day · Goal: ${level}`
         : `Frequency: ${activeDays.length} days / week · Level: ${level}`,
       detailColor: type === 'workout' ? 'bg-workout-prim' : type === 'diet' ? 'bg-meals-prim' : 'bg-rehab-prim',
       progress: 0,
@@ -182,7 +222,7 @@ export default function CreatePlanPage() {
 
   return (
     <div className="flex flex-col min-h-screen bg-surface-page animate-fade-in">
-      
+
       {/* ── Header ── */}
       <div className="px-8 py-6 border-b border-border-primary flex items-center justify-between bg-surface-primary sticky top-0 z-20">
         <h1 className="text-heading-h5 font-bold text-text-headings">Create New Plan</h1>
@@ -193,8 +233,8 @@ export default function CreatePlanPage() {
           <Button variant="neutral" onClick={() => handleSave('draft')} className="border border-border-primary bg-surface-primary text-text-body hover:bg-neutral-100 hidden sm:block">
             Save as Draft
           </Button>
-          <Button 
-            variant="primary" 
+          <Button
+            variant="primary"
             onClick={() => handleSave('planned')}
             className={cn("text-neutral-white", type === 'workout' ? 'bg-workout-prim hover:bg-workout-prim-600' : type === 'diet' ? 'bg-meals-prim hover:bg-meals-prim-600' : 'bg-rehab-prim hover:bg-rehab-prim-600')}
           >
@@ -204,28 +244,28 @@ export default function CreatePlanPage() {
       </div>
 
       <div className="flex-1 flex flex-col lg:flex-row max-w-[1600px] w-full mx-auto">
-        
+
         {/* ── Main Form Area ── */}
         <div className="flex-1 px-8 py-8 lg:p-12 overflow-y-auto">
           <div className="max-w-3xl flex flex-col gap-12">
-            
+
             {/* Step 1: Type */}
             <section>
               <h2 className="text-heading-h6 font-bold text-text-headings mb-1">1. Choose Plan Type</h2>
               <p className="text-body-sm text-text-disabled mb-6">Select the core focus of your new plan. This determines the structure and features available.</p>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <TypeCard 
+                <TypeCard
                   type="workout" active={type === 'workout'} onClick={handleTypeSwitch}
                   icon={<IconWorkout />} title="Workout" desc="Build strength, endurance, or muscle."
                   activeClass="bg-workout-prim text-neutral-white border-workout-prim shadow-lg scale-[1.02]"
                 />
-                <TypeCard 
+                <TypeCard
                   type="diet" active={type === 'diet'} onClick={handleTypeSwitch}
                   icon={<IconDiet />} title="Diet" desc="Track meals, macros, and dietary goals."
                   activeClass="bg-meals-prim text-neutral-white border-meals-prim shadow-lg scale-[1.02]"
                 />
-                <TypeCard 
+                <TypeCard
                   type="rehab" active={type === 'rehab'} onClick={handleTypeSwitch}
                   icon={<IconRehab />} title="Rehab" desc="Targeted recovery and physical therapy."
                   activeClass="bg-rehab-prim text-neutral-white border-rehab-prim shadow-lg scale-[1.02]"
@@ -237,10 +277,10 @@ export default function CreatePlanPage() {
             <section>
               <h2 className="text-heading-h6 font-bold text-text-headings mb-1">2. Basic Information</h2>
               <p className="text-body-sm text-text-disabled mb-6">Set the generic parameters for your plan.</p>
-              
+
               <div className="flex flex-col gap-6 p-6 bg-surface-primary rounded-2xl border border-border-primary">
                 <Field id="planName" name="name" label="Plan Name" placeholder={`e.g., My Awesome ${type.charAt(0).toUpperCase() + type.slice(1)} Plan`} value={name} onChange={e => setName(e.target.value)} />
-                
+
                 <div className="flex flex-col sm:flex-row gap-6">
                   <div className="flex-1">
                     <DatePicker id="startDate" label="Start Date" value={startDate} onChange={setStartDate} placeholder="Select start date" />
@@ -251,15 +291,12 @@ export default function CreatePlanPage() {
                 </div>
 
                 <div className="flex flex-col gap-2">
-                  <label className="text-body-sm font-semibold text-text-headings">Plan Level</label>
-                  <select 
+                  <label className="text-body-sm font-semibold text-text-headings">{getLevelFieldLabel()}</label>
+                  <select
                     value={level} onChange={e => setLevel(e.target.value)}
                     className="w-full rounded-xl px-4 py-2.5 text-body-md border border-border-primary focus:outline-none focus:border-neutral-400 bg-surface-primary text-text-body"
                   >
-                    <option value="Beginner">Beginner</option>
-                    <option value="Intermediate">Intermediate</option>
-                    <option value="Advanced">Advanced</option>
-                    <option value="All Levels">All Levels</option>
+                    {renderLevelOptions()}
                   </select>
                 </div>
               </div>
@@ -275,7 +312,7 @@ export default function CreatePlanPage() {
                 <div className="flex flex-col gap-8">
                   <div className="flex flex-col gap-2">
                     <label className="text-body-sm font-semibold text-text-headings">Equipment Available</label>
-                    <select 
+                    <select
                       value={equipment} onChange={e => setEquipment(e.target.value)}
                       className="w-full rounded-xl px-4 py-2.5 text-body-md border border-border-primary focus:outline-none focus:border-workout-prim bg-surface-primary text-text-body"
                     >
@@ -315,7 +352,7 @@ export default function CreatePlanPage() {
                   <div className="flex flex-col sm:flex-row gap-6">
                     <div className="flex-1 flex flex-col gap-2">
                       <label className="text-body-sm font-semibold text-text-headings">Dietary Preference</label>
-                      <select 
+                      <select
                         value={dietPref} onChange={e => setDietPref(e.target.value)}
                         className="w-full rounded-xl px-4 py-2.5 text-body-md border border-border-primary focus:outline-none focus:border-meals-prim bg-surface-primary text-text-body"
                       >
@@ -323,7 +360,7 @@ export default function CreatePlanPage() {
                         <option value="Vegan">Vegan</option>
                         <option value="Vegetarian">Vegetarian</option>
                         <option value="Keto">Keto</option>
-                        <option value="Diabetes-Friendly">Diabetes-Friendly</option>
+
                       </select>
                     </div>
                     <div className="flex-1">
@@ -394,7 +431,7 @@ export default function CreatePlanPage() {
         <div className="w-full lg:w-[400px] border-t lg:border-t-0 lg:border-l border-border-primary bg-neutral-100 p-8 flex flex-col items-center">
           <div className="sticky top-28 w-full flex flex-col gap-6">
             <h2 className="text-heading-h6 font-bold text-text-headings text-center">My New Plan</h2>
-            
+
             <div className={cn("w-full rounded-3xl overflow-hidden shadow-2xl transition-all duration-500", primaryColorHex)}>
               <div className="px-6 py-10 flex flex-col items-center justify-center text-center gap-4">
                 <div className="w-16 h-16 rounded-2xl bg-neutral-white/20 flex items-center justify-center text-neutral-white mb-2">
@@ -407,13 +444,13 @@ export default function CreatePlanPage() {
                   {type.charAt(0).toUpperCase() + type.slice(1)} · {level}
                 </p>
               </div>
-              
+
               <div className="bg-surface-primary p-6 flex flex-col gap-4">
                 <div className="flex justify-between items-center border-b border-border-primary pb-3">
                   <span className="text-body-sm text-text-disabled font-medium">Duration</span>
                   <span className="text-body-sm font-bold text-text-headings">{durationWeeks} weeks</span>
                 </div>
-                
+
                 {type === 'workout' && (
                   <>
                     <div className="flex justify-between items-center border-b border-border-primary pb-3">
@@ -462,8 +499,8 @@ export default function CreatePlanPage() {
         </div>
       </div>
 
-      <Modal 
-        open={showCancelModal} 
+      <Modal
+        open={showCancelModal}
         onClose={() => setShowCancelModal(false)}
         onConfirm={() => navigate('/plans')}
         title="Discard Plan?"
@@ -471,15 +508,17 @@ export default function CreatePlanPage() {
         Are you sure you want to discard this plan? All your current settings will be lost.
       </Modal>
 
-      <Modal 
-        open={showSwitchModal} 
+      <Modal
+        open={showSwitchModal}
         onClose={() => setShowSwitchModal(false)}
         onConfirm={() => {
           setType(pendingType)
           setName('')
           setStartDate(null)
           setEndDate(null)
-          setLevel('Beginner')
+          if (pendingType === 'workout') setLevel('Beginner')
+          if (pendingType === 'diet') setLevel('General Health')
+          if (pendingType === 'rehab') setLevel('Phase 1 (Pain Management)')
           setEquipment('Basic Equipment')
           setWorkoutDays(['Mon', 'Wed', 'Fri'])
           setDietPref('None')
@@ -494,8 +533,8 @@ export default function CreatePlanPage() {
         You have unsaved changes in your {type} plan. Switching to {pendingType} will discard these changes. Would you like to discard them and switch?
       </Modal>
 
-      <Modal 
-        open={showValidationModal} 
+      <Modal
+        open={showValidationModal}
         onClose={() => setShowValidationModal(false)}
         cancelText="OK, I'll add a name"
         title="Missing Information"
