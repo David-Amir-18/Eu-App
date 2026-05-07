@@ -103,7 +103,7 @@ export default function OnboardingPage() {
     setSaving(true)
     setSaveError('')
     try {
-      await saveUserMetrics(userId, {
+      await saveUserMetrics({
         age: Number(form.age),
         weight: parseFloat(form.weight),
         height: parseFloat(form.height),

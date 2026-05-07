@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { cn } from '../components/utils.js'
 import { Button } from '../components/atoms/Button.jsx'
 import { Field } from '../components/atoms/Field.jsx'
+import { getExercises } from '../api/exercisesService.js'
 
 // ── Mock data ──────────────────────────────────────────────────────────────────
 const MOCK_PLAN = {
@@ -170,8 +171,23 @@ function AddRoutineModal({ open, onClose }) {
 }
 
 // ── Routine detail slide-over ──────────────────────────────────────────────────
-function RoutineSlideOver({ routine, onClose }) {
+function RoutineSlideOver({ routine, onClose, onAddExercise }) {
+  const [search, setSearch] = useState('')
+  const [exercises, setExercises] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [showSearch, setShowSearch] = useState(false)
+
+  useEffect(() => {
+    if (!showSearch) return
+    setLoading(true)
+    getExercises({ search, pageSize: 30 })
+      .then(data => setExercises(data.items))
+      .catch(() => setExercises([]))
+      .finally(() => setLoading(false))
+  }, [search, showSearch])
+
   if (!routine) return null
+
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       <div className="absolute inset-0 bg-neutral-black opacity-40" onClick={onClose} />
@@ -182,6 +198,7 @@ function RoutineSlideOver({ routine, onClose }) {
             <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
+
         <div className="flex-1 overflow-y-auto px-6 py-5 flex flex-col gap-3">
           <p className="text-body-sm text-text-disabled font-semibold uppercase tracking-widest">{routine.exercises.length} exercises</p>
           {routine.exercises.map((ex, i) => (
@@ -190,10 +207,42 @@ function RoutineSlideOver({ routine, onClose }) {
               <span className="text-body-sm text-workout-prim font-semibold">3 × 10</span>
             </div>
           ))}
-          <button className="text-body-sm text-workout-prim font-semibold hover:text-workout-prim-500 transition-colors self-start mt-2">
-            + Add Exercise
-          </button>
+
+          {/* Add exercise section */}
+          {showSearch ? (
+            <div className="flex flex-col gap-2 mt-2">
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Search exercises..."
+                className="w-full rounded-md px-3 py-2 text-body-sm border border-border-primary focus:outline-none focus:border-workout-prim bg-surface-primary text-text-body"
+                autoFocus
+              />
+              {loading && <p className="text-body-sm text-text-disabled">Loading...</p>}
+              <div className="flex flex-col gap-1 max-h-48 overflow-y-auto">
+                {exercises.map(ex => (
+                  <button key={ex.id} onClick={() => { onAddExercise(routine.id, ex.title); setShowSearch(false); setSearch('') }}
+                    className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-workout-prim-100 transition-colors text-left">
+                    <div className="flex-1">
+                      <p className="text-body-sm font-semibold text-text-headings">{ex.title}</p>
+                      <p className="text-body-sm text-text-disabled">{ex.muscle_group} · {ex.equipment_category}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+              <button onClick={() => { setShowSearch(false); setSearch('') }}
+                className="text-body-sm text-text-disabled hover:text-text-headings transition-colors self-start">
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button onClick={() => setShowSearch(true)}
+              className="text-body-sm text-workout-prim font-semibold hover:text-workout-prim-500 transition-colors self-start mt-2">
+              + Add Exercise
+            </button>
+          )}
         </div>
+
         <div className="px-6 py-4 border-t border-border-primary">
           <Button variant="workout-primary" size="md" fullWidth>Start This Routine</Button>
         </div>
@@ -242,6 +291,13 @@ export default function WorkoutPlanPage() {
   const [showLog, setShowLog] = useState(false)
 
   const todayRoutine = getTodayRoutine(plan, routines)
+
+  function addExerciseToRoutine(routineId, exerciseName) {
+    setRoutines(r => r.map(rt => rt.id === routineId
+      ? { ...rt, exercises: [...rt.exercises, exerciseName] }
+      : rt
+    ))
+  }
   const pct = Math.round((plan.progress / plan.progressMax) * 100)
 
   return (
@@ -381,7 +437,7 @@ export default function WorkoutPlanPage() {
       {/* ── Modals ── */}
       <StructureModal open={showStructure} onClose={() => setShowStructure(false)} plan={plan} routines={routines} />
       <AddRoutineModal open={showAddRoutine} onClose={() => setShowAddRoutine(false)} />
-      <RoutineSlideOver routine={activeRoutine && !showLog ? activeRoutine : null} onClose={() => setActiveRoutine(null)} />
+      <RoutineSlideOver routine={activeRoutine && !showLog ? activeRoutine : null} onClose={() => setActiveRoutine(null)} onAddExercise={addExerciseToRoutine} />
       <LogWorkoutModal open={showLog} onClose={() => { setShowLog(false) }} routine={activeRoutine || todayRoutine} />
     </div>
   )

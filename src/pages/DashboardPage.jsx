@@ -265,7 +265,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!userId) { setProfileLoading(false); return }
-    getUserMetrics(userId)
+    getUserMetrics()
       .then(data => {
         console.log('Health profile response:', data)
         setProfile(data)
