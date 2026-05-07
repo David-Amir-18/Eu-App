@@ -14,6 +14,7 @@ import PlansPage from './pages/PlansPage.jsx'
 import MealsPage from './pages/MealsPage.jsx'
 import RehabPlanPage from './pages/RehabPlanPage.jsx'
 import CreatePlanPage from './pages/CreatePlanPage.jsx'
+import WorkoutsPage from './pages/WorkoutsPage.jsx'
 
 
 function App() {
@@ -28,6 +29,7 @@ function App() {
         <Route element={<DashboardLayout />}>
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/meals" element={<MealsPage />} />
+          <Route path="/workouts" element={<WorkoutsPage />} />
           <Route path="/plans" element={<PlansPage />} />
           <Route path="/plans/create" element={<CreatePlanPage />} />
           <Route path="/plans/workout/:id" element={<WorkoutPlanPage />} />
