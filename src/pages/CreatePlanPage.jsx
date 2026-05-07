@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { cn } from '../components/utils.js'
 import { Button } from '../components/atoms/Button.jsx'
@@ -6,6 +6,8 @@ import { Field } from '../components/atoms/Field.jsx'
 import { DatePicker } from '../components/molecules/DatePicker.jsx'
 import { DefinedField } from '../components/molecules/DefinedField.jsx'
 import { getExercises } from '../api/exercisesService.js'
+import { createWorkoutPlan, createRoutine, addExerciseToRoutine } from '../api/workoutsService.js'
+import { getMeals, createMealPlan, addMealSlot } from '../api/mealPlansService.js'
 
 // ── Icons ──────────────────────────────────────────────────────────────────────
 function IconWorkout() {
@@ -20,7 +22,9 @@ function IconRehab() {
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-const MEAL_SLOTS = ['Breakfast', 'Lunch', 'Dinner', 'Snacks']
+const MEAL_SLOT_TYPES = ['breakfast', 'lunch', 'dinner', 'snack']
+const MEAL_SLOT_LABELS = { breakfast: 'Breakfast', lunch: 'Lunch', dinner: 'Dinner', snack: 'Snack' }
+const DAY_TO_WEEK_INDEX = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }
 
 const EQUIPMENT_OPTIONS = [
   { value: 'none', label: 'Bodyweight Only (None)' },
@@ -50,10 +54,10 @@ const MUSCLE_GROUP_OPTIONS = [
 ]
 
 const DIET_PREF_OPTIONS = [
-  { value: 'None', label: 'No Preference' },
-  { value: 'Vegan', label: 'Vegan' },
-  { value: 'Vegetarian', label: 'Vegetarian' },
-  { value: 'Keto', label: 'Keto' }
+  { value: 'weight_loss',   label: 'Weight Loss' },
+  { value: 'muscle_gain',  label: 'Muscle Gain' },
+  { value: 'maintenance',  label: 'Maintenance' },
+  { value: 'rehab',        label: 'Recovery / Rehab' },
 ]
 
 // ── Components ─────────────────────────────────────────────────────────────────
@@ -102,14 +106,19 @@ function ToggleGroup({ options, selected, onChange, activeColor = 'bg-workout-pr
   )
 }
 
-function Modal({ open, onClose, onConfirm, title, confirmText = "Yes, discard", cancelText = "No, keep editing", children }) {
+function Modal({ open, onClose, onConfirm, title, confirmText = "Yes, discard", cancelText = "No, keep editing", zIndex = 'z-50', children }) {
   if (!open) return null
+  const isTextContent = typeof children === 'string'
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className={`fixed inset-0 ${zIndex} flex items-center justify-center p-4`}>
       <div className="absolute inset-0 bg-neutral-black/50" onClick={onClose} />
       <div className="relative bg-surface-primary rounded-2xl shadow-2xl w-full max-w-sm p-6 flex flex-col gap-4">
         <h2 className="text-heading-h6 font-bold text-text-headings">{title}</h2>
-        <p className="text-body-md text-text-disabled">{children}</p>
+        {isTextContent ? (
+          <p className="text-body-md text-text-disabled">{children}</p>
+        ) : (
+          <div>{children}</div>
+        )}
         <div className="flex gap-3 mt-2">
           {cancelText && <Button variant="neutral" onClick={onClose} className="flex-1 border border-border-primary">{cancelText}</Button>}
           {onConfirm && <Button variant="primary" onClick={onConfirm} className="flex-1 bg-error-500 hover:bg-error-600 text-neutral-white">{confirmText}</Button>}
@@ -144,38 +153,94 @@ export default function CreatePlanPage() {
   const [exerciseType, setExerciseType] = useState(draftData?.rawExerciseType || 'weight_reps')
   const [muscleGroup, setMuscleGroup] = useState(draftData?.rawMuscleGroup || 'chest')
   const hundredPercentBodyweight = equipment === 'none'
-  const [routineExercises, setRoutineExercises] = useState(draftData?.routines?.[0]?.exercises || [])
+  const [routines, setRoutines] = useState(draftData?.rawRoutines || [])
 
   // Exercise selection states
   const [showExerciseSearchModal, setShowExerciseSearchModal] = useState(false)
   const [exerciseSearchQuery, setExerciseSearchQuery] = useState('')
   const [availableExercises, setAvailableExercises] = useState([])
   const [exerciseSearchLoading, setExerciseSearchLoading] = useState(false)
+  const [activeRoutineId, setActiveRoutineId] = useState(null)
+  const [showRoutineModal, setShowRoutineModal] = useState(false)
+  const [editingRoutineId, setEditingRoutineId] = useState(null)
+  const [routineNameInput, setRoutineNameInput] = useState('')
+  const [routineDescriptionInput, setRoutineDescriptionInput] = useState('')
+  const [showAssignDaysModal, setShowAssignDaysModal] = useState(false)
+  const [routineForDayAssign, setRoutineForDayAssign] = useState(null)
+  const [showExerciseConfigModal, setShowExerciseConfigModal] = useState(false)
+  const [pendingExercise, setPendingExercise] = useState(null)
+  const [exerciseConfig, setExerciseConfig] = useState({ sets: '', reps: '', weight_kg: '', rest_time_seconds: '' })
+
+  // Modal exercise filter state
+  const [modalMuscleGroup, setModalMuscleGroup] = useState('all')
+  const [modalExerciseType, setModalExerciseType] = useState('all')
 
   useEffect(() => {
-    if (!showExerciseSearchModal) return
+    if (!showExerciseSearchModal || !activeRoutineId) return
     setExerciseSearchLoading(true)
     getExercises({
       page: 1,
       pageSize: 50,
       search: exerciseSearchQuery || undefined,
       equipmentCategory: hundredPercentBodyweight ? 'none' : undefined,
+      exerciseType: modalExerciseType !== 'all' ? modalExerciseType : undefined,
+      muscleGroup: modalMuscleGroup !== 'all' ? modalMuscleGroup : undefined,
     })
       .then((data) => {
-        let items = data.items || []
-        if (hundredPercentBodyweight) {
-          items = items.filter(e => e.equipment_category !== 'machine' && e.equipment_category !== 'barbell' && e.equipment_category !== 'dumbbell')
-        }
-        setAvailableExercises(items)
+        setAvailableExercises(data.items || [])
       })
       .catch(err => console.error(err))
       .finally(() => setExerciseSearchLoading(false))
-  }, [showExerciseSearchModal, exerciseSearchQuery, hundredPercentBodyweight])
+  }, [showExerciseSearchModal, exerciseSearchQuery, hundredPercentBodyweight, activeRoutineId, modalMuscleGroup, modalExerciseType])
 
-  // Diet State
-  const [dietPref, setDietPref] = useState(draftData?.rawDietPref || 'None')
+  // Meal search — fires whenever the modal is open or filters change
+  useEffect(() => {
+    if (!showMealSearchModal) return
+    setMealSearchLoading(true)
+    getMeals({
+      page: mealSearchPage,
+      pageSize: MEAL_PAGE_SIZE,
+      search: mealSearchQuery || undefined,
+      tag:    mealSearchTag   || undefined,
+      maxCalories: mealSearchMaxCal ? parseInt(mealSearchMaxCal) : undefined,
+    })
+      .then(data => { setMealSearchResults(data.results || []); setMealSearchTotal(data.total || 0) })
+      .catch(() => setMealSearchResults([]))
+      .finally(() => setMealSearchLoading(false))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showMealSearchModal, mealSearchQuery, mealSearchTag, mealSearchMaxCal, mealSearchPage])
+
+  function openMealSearch(slotType) {
+    setMealSearchSlot(slotType)
+    setMealSearchQuery('')
+    setMealSearchTag('')
+    setMealSearchMaxCal('')
+    setMealSearchPage(1)
+    setMealSearchResults([])
+    setShowMealSearchModal(true)
+  }
+
+  function selectMeal(meal) {
+    setSelectedMealSlots(prev => ({ ...prev, [mealSearchSlot]: meal }))
+    setShowMealSearchModal(false)
+  }
+
+  // Diet / Meal State
+  const [dietPref, setDietPref] = useState(draftData?.rawDietPref || 'weight_loss')
   const [calorieTarget, setCalorieTarget] = useState(draftData?.rawCalorieTarget || '2000')
-  const [mealSlots, setMealSlots] = useState(draftData?.rawMealSlots || ['Breakfast', 'Lunch', 'Dinner', 'Snacks'])
+  // selectedMealSlots: { breakfast: MealListItem|null, lunch: ..., dinner: ..., snack: ... }
+  const [selectedMealSlots, setSelectedMealSlots] = useState({ breakfast: null, lunch: null, dinner: null, snack: null })
+  // Meal search modal state
+  const [showMealSearchModal, setShowMealSearchModal] = useState(false)
+  const [mealSearchSlot, setMealSearchSlot] = useState(null)   // which slot type is being filled
+  const [mealSearchQuery, setMealSearchQuery] = useState('')
+  const [mealSearchTag, setMealSearchTag] = useState('')
+  const [mealSearchMaxCal, setMealSearchMaxCal] = useState('')
+  const [mealSearchResults, setMealSearchResults] = useState([])
+  const [mealSearchLoading, setMealSearchLoading] = useState(false)
+  const [mealSearchPage, setMealSearchPage] = useState(1)
+  const [mealSearchTotal, setMealSearchTotal] = useState(0)
+  const MEAL_PAGE_SIZE = 20
 
   // Rehab State
   const [injury, setInjury] = useState(draftData?.rawInjury || '')
@@ -185,13 +250,131 @@ export default function CreatePlanPage() {
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [showSwitchModal, setShowSwitchModal] = useState(false)
   const [showValidationModal, setShowValidationModal] = useState(false)
+  const [validationMessage, setValidationMessage] = useState('Please give your plan a name before saving! We need it to help you identify it later.')
   const [pendingType, setPendingType] = useState(null)
 
   // ── Derived Data ──
   const isDirty = name !== '' || startDate !== null || endDate !== null ||
-    (type === 'workout' ? (equipment !== 'dumbbell' || workoutDays.length !== 3 || exerciseType !== 'weight_reps' || muscleGroup !== 'chest') :
-      type === 'diet' ? (dietPref !== 'None' || calorieTarget !== '2000' || mealSlots.length !== 4) :
+    (type === 'workout' ? (equipment !== 'dumbbell' || workoutDays.length !== 3 || exerciseType !== 'weight_reps' || muscleGroup !== 'chest' || routines.length > 0) :
+      type === 'diet' ? (dietPref !== 'weight_loss' || calorieTarget !== '2000' || Object.values(selectedMealSlots).some(Boolean)) :
         (injury !== '' || rehabDays.length !== 4))
+
+  const activeRoutine = routines.find(r => r.id === activeRoutineId) || null
+
+  const openCreateRoutineModal = () => {
+    setEditingRoutineId(null)
+    setRoutineNameInput('')
+    setRoutineDescriptionInput('')
+    setShowRoutineModal(true)
+  }
+
+  const openEditRoutineModal = (routine) => {
+    setEditingRoutineId(routine.id)
+    setRoutineNameInput(routine.name)
+    setRoutineDescriptionInput(routine.description || '')
+    setShowRoutineModal(true)
+  }
+
+  const saveRoutine = () => {
+    const trimmedName = routineNameInput.trim()
+    if (!trimmedName) return
+
+    if (editingRoutineId) {
+      setRoutines(prev => prev.map(r => (
+        r.id === editingRoutineId
+          ? { ...r, name: trimmedName, description: routineDescriptionInput.trim() || null }
+          : r
+      )))
+    } else {
+      setRoutines(prev => [
+        ...prev,
+        {
+          id: `routine-${Date.now()}`,
+          name: trimmedName,
+          description: routineDescriptionInput.trim() || null,
+          assignedDays: [],
+          exercises: [],
+        }
+      ])
+    }
+    setShowRoutineModal(false)
+  }
+
+  const removeRoutine = (routineId) => {
+    setRoutines(prev => prev.filter(r => r.id !== routineId))
+    if (activeRoutineId === routineId) setActiveRoutineId(null)
+  }
+
+  const openAssignDays = (routineId) => {
+    setRoutineForDayAssign(routineId)
+    setShowAssignDaysModal(true)
+  }
+
+  const toggleRoutineDay = (day) => {
+    if (!routineForDayAssign) return
+    setRoutines(prev => {
+      const target = prev.find(r => r.id === routineForDayAssign)
+      const alreadyAssigned = target?.assignedDays?.includes(day)
+      return prev.map(r => {
+        if (r.id === routineForDayAssign) {
+          return {
+            ...r,
+            assignedDays: alreadyAssigned
+              ? r.assignedDays.filter(d => d !== day)
+              : [...r.assignedDays, day]
+          }
+        }
+        // Keep one routine per day by removing this day from others.
+        return { ...r, assignedDays: r.assignedDays.filter(d => d !== day) }
+      })
+    })
+  }
+
+  const openExerciseSearchForRoutine = (routineId) => {
+    setActiveRoutineId(routineId)
+    setExerciseSearchQuery('')
+    setModalMuscleGroup('all')
+    setModalExerciseType('all')
+    setShowExerciseSearchModal(true)
+  }
+
+  const openExerciseConfig = (exercise) => {
+    setPendingExercise(exercise)
+    setExerciseConfig({ sets: '', reps: '', weight_kg: '', rest_time_seconds: '' })
+    setShowExerciseConfigModal(true)
+  }
+
+  const addExerciseToRoutine = () => {
+    if (!pendingExercise || !activeRoutineId) return
+    setRoutines(prev => prev.map(r => {
+      if (r.id !== activeRoutineId) return r
+      if (r.exercises.some(ex => ex.exercise_id === pendingExercise.id)) return r
+      return {
+        ...r,
+        exercises: [
+          ...r.exercises,
+          {
+            exercise_id: pendingExercise.id,
+            title: pendingExercise.title,
+            sets: exerciseConfig.sets ? Number(exerciseConfig.sets) : null,
+            reps: exerciseConfig.reps ? Number(exerciseConfig.reps) : null,
+            weight_kg: exerciseConfig.weight_kg ? Number(exerciseConfig.weight_kg) : null,
+            rest_time_seconds: exerciseConfig.rest_time_seconds ? Number(exerciseConfig.rest_time_seconds) : null,
+          }
+        ]
+      }
+    }))
+    setShowExerciseConfigModal(false)
+    setPendingExercise(null)
+  }
+
+  const removeExerciseFromRoutine = (routineId, exerciseId) => {
+    setRoutines(prev => prev.map(r => (
+      r.id === routineId
+        ? { ...r, exercises: r.exercises.filter(ex => ex.exercise_id !== exerciseId) }
+        : r
+    )))
+  }
 
   const handleTypeSwitch = (newType) => {
     if (newType === type) return
@@ -245,10 +428,25 @@ export default function CreatePlanPage() {
     ? Math.max(1, Math.round((endDate - startDate) / (1000 * 60 * 60 * 24 * 7)))
     : 0
 
-  const handleSave = (status) => {
+  const handleSave = async (status) => {
     if (!name.trim()) {
+      setValidationMessage('Please give your plan a name before saving! We need it to help you identify it later.')
       setShowValidationModal(true)
       return
+    }
+
+    if (type === 'workout') {
+      if (routines.length === 0) {
+        setValidationMessage('Please create at least one routine before saving your workout plan.')
+        setShowValidationModal(true)
+        return
+      }
+      const hasAssignedSlots = routines.some(r => (r.assignedDays || []).length > 0)
+      if (!hasAssignedSlots) {
+        setValidationMessage('Assign at least one day to a routine before saving your workout plan.')
+        setShowValidationModal(true)
+        return
+      }
     }
 
     // Generate or preserve ID
@@ -261,13 +459,15 @@ export default function CreatePlanPage() {
       defaultTab: type.charAt(0).toUpperCase() + type.slice(1),
       status: status, // 'draft' | 'active' | 'planned'
       dateRange: `${formatDateShort(startDate)} → ${formatDateShort(endDate)} · ${durationWeeks} weeks`,
-      routines: type === 'workout' ? [
-        {
-          id: 'default-routine',
-          name: 'Unified Workout Routine',
-          exercises: routineExercises
-        }
-      ] : [],
+      routines: type === 'workout'
+        ? routines.map((r, idx) => ({
+          id: `routine-${idx + 1}`,
+          name: r.name,
+          description: r.description || null,
+          assignedDays: r.assignedDays || [],
+          exercises: r.exercises.map(ex => ex.title),
+        }))
+        : [],
       detail: type === 'diet'
         ? `Daily calorie target: ${calorieTarget} kcal / day · Goal: ${level}`
         : `Frequency: ${activeDays.length} days / week · Level: ${level}`,
@@ -287,51 +487,133 @@ export default function CreatePlanPage() {
       rawExerciseType: exerciseType,
       rawMuscleGroup: muscleGroup,
       rawHundredPercentBodyweight: equipment === 'none',
+      rawRoutines: routines,
       rawDietPref: dietPref,
       rawCalorieTarget: calorieTarget,
-      rawMealSlots: mealSlots,
       rawInjury: injury,
       rawRehabDays: rehabDays,
     }
 
-    // Save to localStorage
+    if (type === 'workout') {
+      const difficultyMap = {
+        Beginner: 'beginner',
+        Intermediate: 'intermediate',
+        Advanced: 'advanced',
+        'All Levels': 'advanced',
+      }
+      try {
+        // Step 1: Create the plan (metadata only)
+        const createdPlan = await createWorkoutPlan({
+          title: name.trim(),
+          difficulty_level: difficultyMap[level] || 'beginner',
+          schedule_type: 'weekly',
+          description: `${exerciseType} focused ${muscleGroup} workout plan`,
+          start_date: startDate ? startDate.toISOString().split('T')[0] : null,
+          end_date: endDate ? endDate.toISOString().split('T')[0] : null,
+        })
+
+        // Step 2: Create each routine + its exercises
+        for (const [routineIndex, routine] of routines.entries()) {
+          const days = routine.assignedDays || []
+          for (const day of days) {
+            const createdRoutine = await createRoutine(createdPlan.id, {
+              name: routine.name,
+              description: routine.description || null,
+              day_of_week: DAY_TO_WEEK_INDEX[day],
+              position: routineIndex,
+              is_rest_day: false,
+            })
+            // Step 3: Add exercises to the created routine
+            for (const [pos, ex] of (routine.exercises || []).entries()) {
+              await addExerciseToRoutine(createdRoutine.id, {
+                exercise_id: ex.exercise_id,
+                position: pos,
+                sets: ex.sets ?? null,
+                reps: ex.reps ?? null,
+                weight_kg: ex.weight_kg ?? null,
+                rest_time_seconds: ex.rest_time_seconds ?? null,
+              })
+            }
+          }
+        }
+
+        // Step 4: Save minimal reference to localStorage and navigate to plan
+        const existing = localStorage.getItem('user_plans')
+        let plans = existing ? JSON.parse(existing) : []
+        if (draftData?.id) plans = plans.filter(p => p.id !== draftData.id)
+        plans.push({ ...newPlan, id: createdPlan.id, backendId: createdPlan.id })
+        localStorage.setItem('user_plans', JSON.stringify(plans))
+        navigate(`/plans/workout/${createdPlan.id}`)
+        return
+      } catch (error) {
+        setValidationMessage(error.message || 'Failed to save workout plan to server.')
+        setShowValidationModal(true)
+        return
+      }
+    }
+
+    if (type === 'diet') {
+      try {
+        // Step 1: Create the meal plan
+        const createdPlan = await createMealPlan({
+          title: name.trim(),
+          description: `${dietPref} meal plan · ${calorieTarget} kcal/day`,
+          goal_type: dietPref,
+          start_date: startDate ? startDate.toISOString().split('T')[0] : null,
+          end_date:   endDate   ? endDate.toISOString().split('T')[0]   : null,
+        })
+        // Step 2: Add each selected meal slot
+        for (const [slotType, meal] of Object.entries(selectedMealSlots)) {
+          if (!meal) continue
+          await addMealSlot(createdPlan.id, { meal_id: meal.id, meal_type: slotType })
+        }
+        // Save reference and navigate
+        const existing = localStorage.getItem('user_plans')
+        let plans = existing ? JSON.parse(existing) : []
+        if (draftData?.id) plans = plans.filter(p => p.id !== draftData.id)
+        plans.push({ ...newPlan, id: createdPlan.id, backendId: createdPlan.id })
+        localStorage.setItem('user_plans', JSON.stringify(plans))
+        navigate('/plans')
+        return
+      } catch (error) {
+        setValidationMessage(error.message || 'Failed to save meal plan to server.')
+        setShowValidationModal(true)
+        return
+      }
+    }
+
+    // Save to localStorage (rehab / other)
     const existing = localStorage.getItem('user_plans')
     let plans = existing ? JSON.parse(existing) : []
-    // If updating an existing draft, remove the old instance
-    if (draftData?.id) {
-      plans = plans.filter(p => p.id !== draftData.id)
-    }
+    if (draftData?.id) plans = plans.filter(p => p.id !== draftData.id)
     plans.push(newPlan)
     localStorage.setItem('user_plans', JSON.stringify(plans))
-
-    // Navigate back to plans
     navigate('/plans')
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-surface-page animate-fade-in">
+    <div className="flex flex-col h-screen overflow-hidden bg-surface-page animate-fade-in">
 
       {/* ── Header ── */}
-      <div className="px-8 py-6 border-b border-border-primary flex items-center justify-between bg-surface-primary sticky top-0 z-20">
+      <div className="shrink-0 px-8 py-6 border-b border-border-primary flex items-center justify-between bg-surface-primary sticky top-0 z-20">
         <h1 className="text-heading-h5 font-bold text-text-headings">Create New Plan</h1>
         <div className="flex items-center gap-3">
-          <Button variant="neutral" onClick={() => setShowCancelModal(true)} className="border border-border-primary bg-surface-primary text-text-body hover:bg-neutral-100 hidden sm:block">
+          <Button variant="outline" onClick={() => setShowCancelModal(true)} className="hidden sm:block">
             Cancel
           </Button>
-          <Button variant="neutral" onClick={() => handleSave('draft')} className="border border-border-primary bg-surface-primary text-text-body hover:bg-neutral-100 hidden sm:block">
+          <Button variant="outline" onClick={() => handleSave('draft')} className="hidden sm:block">
             Save as Draft
           </Button>
           <Button
-            variant="primary"
+            variant={type === 'workout' ? 'workout-primary' : type === 'diet' ? 'meals-primary' : 'rehab-primary'}
             onClick={() => handleSave('planned')}
-            className={cn("text-neutral-white", type === 'workout' ? 'bg-workout-prim hover:bg-workout-prim-600' : type === 'diet' ? 'bg-meals-prim hover:bg-meals-prim-600' : 'bg-rehab-prim hover:bg-rehab-prim-600')}
           >
             Save Plan
           </Button>
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col lg:flex-row max-w-[1600px] w-full mx-auto">
+      <div className="flex-1 flex min-h-0 overflow-hidden w-full">
 
         {/* ── Main Form Area ── */}
         <div className="flex-1 px-8 py-8 lg:p-12 overflow-y-auto">
@@ -434,50 +716,76 @@ export default function CreatePlanPage() {
                   <div className="flex flex-col gap-4 mt-4">
                     <div className="flex justify-between items-center border-b border-border-primary pb-3">
                       <div>
-                        <label className="text-body-sm font-bold text-text-headings">Workout Routine</label>
-                        <p className="text-body-xs text-text-disabled mt-0.5">Customize the exercises included in this training program's central routine.</p>
+                        <label className="text-body-sm font-bold text-text-headings">Workout Routines</label>
+                        <p className="text-body-sm text-text-disabled mt-0.5">Create routines, assign each one to week days, then add exercises per routine.</p>
                       </div>
                       <button
                         type="button"
-                        onClick={() => setShowExerciseSearchModal(true)}
+                        onClick={openCreateRoutineModal}
                         className="text-body-xs font-bold text-workout-prim bg-workout-prim/10 hover:bg-workout-prim/20 px-4 py-2 rounded-xl transition-colors shrink-0"
                       >
-                        + Add Exercise
+                        + Create Routine
                       </button>
                     </div>
 
-                    {routineExercises.length > 0 ? (
+                    {routines.length > 0 ? (
                       <div className="flex flex-col gap-3">
-                        {routineExercises.map((exercise, index) => (
-                          <div key={index} className="flex items-center justify-between p-4 rounded-xl border border-border-primary bg-surface-primary hover:border-workout-prim transition-all shadow-sm">
-                            <div className="flex items-center gap-3">
-                              <span className="w-6 h-6 rounded-full bg-workout-prim-100 text-workout-prim flex items-center justify-center font-bold text-body-xs">
-                                {index + 1}
-                              </span>
-                              <span className="text-body-md font-bold text-text-headings">{typeof exercise === 'string' ? exercise : exercise.title}</span>
+                        {routines.map((routine) => (
+                          <div key={routine.id} className="p-4 rounded-2xl border border-border-primary bg-surface-primary shadow-sm flex flex-col gap-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <h4 className="text-body-md font-bold text-text-headings">{routine.name}</h4>
+                                <p className="text-body-sm text-text-disabled">
+                                  {(routine.assignedDays || []).length} assigned day(s) · {(routine.exercises || []).length} exercise(s)
+                                </p>
+                              </div>
+                              <div className="flex gap-2">
+                                <Button type="button" variant="ghost" size="sm" onClick={() => openEditRoutineModal(routine)}>Edit</Button>
+                                <Button type="button" variant="ghost" size="sm" onClick={() => removeRoutine(routine.id)} className="text-text-error">Delete</Button>
+                              </div>
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => setRoutineExercises(prev => prev.filter((_, i) => i !== index))}
-                              className="text-text-disabled hover:text-text-error transition-colors p-1"
-                              title="Remove Exercise"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-                            </button>
+
+                            <div className="flex flex-wrap gap-2">
+                              {(routine.assignedDays || []).length > 0 ? (
+                                routine.assignedDays.map(day => (
+                                  <span key={day} className="px-2.5 py-1 rounded-lg text-body-sm font-semibold bg-workout-prim-100 text-workout-prim">{day}</span>
+                                ))
+                              ) : (
+                                <span className="text-body-sm text-text-disabled">No days assigned yet.</span>
+                              )}
+                            </div>
+
+                            {(routine.exercises || []).length > 0 && (
+                              <div className="flex flex-col gap-2">
+                                {routine.exercises.map((ex, index) => (
+                                  <div key={ex.exercise_id} className="flex items-center justify-between px-3 py-2 rounded-xl bg-surface-primary border border-border-primary">
+                                    <span className="text-body-sm font-semibold text-text-headings">{index + 1}. {ex.title}</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => removeExerciseFromRoutine(routine.id, ex.exercise_id)}
+                                      className="text-text-disabled hover:text-text-error transition-colors p-1"
+                                      title="Remove Exercise"
+                                    >
+                                      <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            <div className="flex flex-wrap gap-2">
+                              <Button type="button" variant="workout-outline" size="sm" onClick={() => openAssignDays(routine.id)}>Assign Week Days</Button>
+                              <Button type="button" variant="workout-primary" size="sm" onClick={() => openExerciseSearchForRoutine(routine.id)}>Add Exercises</Button>
+                            </div>
                           </div>
                         ))}
                       </div>
                     ) : (
-                      <div className="py-8 text-center border-2 border-dashed border-border-primary rounded-2xl bg-neutral-50/50">
-                        <p className="text-body-md font-semibold text-text-disabled mb-1">No Exercises Added Yet</p>
-                        <p className="text-body-xs text-text-disabled mb-4">Click "Add Exercise" to select and build your custom workout routine.</p>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setShowExerciseSearchModal(true)}
-                        >
-                          Browse Exercise Database
+                      <div className="py-8 text-center border-2 border-dashed border-border-primary rounded-2xl bg-neutral-100">
+                        <p className="text-body-md font-semibold text-text-disabled mb-1">No Routines Added Yet</p>
+                        <p className="text-body-xs text-text-disabled mb-4">Create your first routine, assign it to days, then add exercises to it.</p>
+                        <Button type="button" variant="workout-outline" size="sm" onClick={openCreateRoutineModal}>
+                          Create First Routine
                         </Button>
                       </div>
                     )}
@@ -490,8 +798,8 @@ export default function CreatePlanPage() {
                 <div className="flex flex-col gap-8">
                   <div className="flex flex-col sm:flex-row gap-6">
                     <DefinedField
-                      id="diet-preference"
-                      label="Dietary Preference"
+                      id="diet-goal"
+                      label="Goal Type"
                       value={dietPref}
                       onChange={setDietPref}
                       options={DIET_PREF_OPTIONS}
@@ -502,27 +810,48 @@ export default function CreatePlanPage() {
                     </div>
                   </div>
 
-                  <div className="flex flex-col gap-2">
-                    <label className="text-body-sm font-semibold text-text-headings">Preferred Meal Slots</label>
-                    <ToggleGroup options={MEAL_SLOTS} selected={mealSlots} onChange={setMealSlots} activeColor="bg-meals-prim" />
-                  </div>
-
-                  {/* Meal Blocks */}
-                  {mealSlots.length > 0 && (
-                    <div className="flex flex-col gap-3 mt-4">
-                      <label className="text-body-sm font-semibold text-text-headings">Daily Structure</label>
-                      {MEAL_SLOTS.filter(s => mealSlots.includes(s)).map(slot => (
-                        <div key={slot} className="flex items-center gap-4 p-4 rounded-xl border border-border-primary bg-surface-primary">
-                          <span className="w-20 text-body-sm font-bold text-meals-prim">{slot}</span>
+                  {/* Meal slot pickers */}
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center justify-between border-b border-border-primary pb-3">
+                      <div>
+                        <label className="text-body-sm font-bold text-text-headings">Daily Meal Slots</label>
+                        <p className="text-body-sm text-text-disabled mt-0.5">Pick one meal per slot from the library. All slots are optional.</p>
+                      </div>
+                    </div>
+                    {MEAL_SLOT_TYPES.map(slotType => {
+                      const meal = selectedMealSlots[slotType]
+                      return (
+                        <div key={slotType} className="flex items-center gap-4 p-4 rounded-xl border border-border-primary bg-surface-primary transition-all hover:border-meals-prim">
+                          <span className="w-24 shrink-0 text-body-sm font-bold text-meals-prim capitalize">{MEAL_SLOT_LABELS[slotType]}</span>
                           <div className="flex-1 border-l border-border-primary pl-4">
-                            <button className="text-body-sm font-semibold text-text-disabled border border-dashed border-border-primary rounded-lg px-4 py-2 w-full text-left hover:bg-neutral-100 transition-colors">
-                              + Add Meal Option
-                            </button>
+                            {meal ? (
+                              <div className="flex items-center gap-3">
+                                {meal.image_url && (
+                                  <img src={meal.image_url} alt={meal.title} className="w-10 h-10 rounded-lg object-cover shrink-0" />
+                                )}
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-body-sm font-bold text-text-headings truncate">{meal.title}</p>
+                                  <p className="text-body-sm text-text-disabled">
+                                    {meal.nutrition?.calories_cal ? `${meal.nutrition.calories_cal} kcal` : ''}
+                                    {meal.nutrition?.protein_g ? ` · ${meal.nutrition.protein_g}g protein` : ''}
+                                  </p>
+                                </div>
+                                <button type="button" onClick={() => setSelectedMealSlots(p => ({ ...p, [slotType]: null }))}
+                                  className="text-text-disabled hover:text-text-error transition-colors shrink-0 p-1">
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                </button>
+                              </div>
+                            ) : (
+                              <button type="button" onClick={() => openMealSearch(slotType)}
+                                className="text-body-sm font-semibold text-text-disabled border border-dashed border-border-primary rounded-lg px-4 py-2 w-full text-left hover:bg-neutral-100 hover:text-meals-prim hover:border-meals-prim transition-colors">
+                                + Choose a meal…
+                              </button>
+                            )}
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  )}
+                      )
+                    })}
+                  </div>
                 </div>
               )}
 
@@ -562,8 +891,8 @@ export default function CreatePlanPage() {
         </div>
 
         {/* ── Summary Sticky Sidebar ── */}
-        <div className="w-full lg:w-[400px] border-t lg:border-t-0 lg:border-l border-border-primary bg-neutral-100 p-8 flex flex-col items-center">
-          <div className="sticky top-28 w-full flex flex-col gap-6">
+        <div className="shrink-0 w-full lg:w-[400px] border-l border-border-primary bg-neutral-100 overflow-y-auto">
+          <div className="p-8 flex flex-col gap-6">
             <h2 className="text-heading-h6 font-bold text-text-headings text-center">My New Plan</h2>
 
             <div className={cn("w-full rounded-3xl overflow-hidden shadow-2xl transition-all duration-500", primaryColorHex)}>
@@ -612,9 +941,15 @@ export default function CreatePlanPage() {
                       <span className="text-body-sm text-text-disabled font-medium">Daily Target</span>
                       <span className="text-body-sm font-bold text-text-headings">{calorieTarget} kcal</span>
                     </div>
+                    <div className="flex justify-between items-center border-b border-border-primary pb-3">
+                      <span className="text-body-sm text-text-disabled font-medium">Goal</span>
+                      <span className="text-body-sm font-bold text-text-headings capitalize">{dietPref.replace('_', ' ')}</span>
+                    </div>
                     <div className="flex justify-between items-center pb-1">
-                      <span className="text-body-sm text-text-disabled font-medium">Dietary Pref</span>
-                      <span className="text-body-sm font-bold text-text-headings">{dietPref}</span>
+                      <span className="text-body-sm text-text-disabled font-medium">Meals Assigned</span>
+                      <span className="text-body-sm font-bold text-text-headings">
+                        {Object.values(selectedMealSlots).filter(Boolean).length} / {MEAL_SLOT_TYPES.length}
+                      </span>
                     </div>
                   </>
                 )}
@@ -665,6 +1000,7 @@ export default function CreatePlanPage() {
           setWorkoutDays(['Mon', 'Wed', 'Fri'])
           setExerciseType('weight_reps')
           setMuscleGroup('chest')
+          setRoutines([])
           setDietPref('None')
           setCalorieTarget('2000')
           setMealSlots(['Breakfast', 'Lunch', 'Dinner'])
@@ -683,7 +1019,70 @@ export default function CreatePlanPage() {
         cancelText="OK, I'll add a name"
         title="Missing Information"
       >
-        Please give your plan a name before saving! We need it to help you identify it later.
+        {validationMessage}
+      </Modal>
+
+      <Modal
+        open={showRoutineModal}
+        onClose={() => setShowRoutineModal(false)}
+        onConfirm={saveRoutine}
+        confirmText={editingRoutineId ? 'Save Routine' : 'Create Routine'}
+        cancelText="Cancel"
+        title={editingRoutineId ? 'Edit Routine' : 'Create Routine'}
+      >
+        <div className="flex flex-col gap-4">
+          <Field
+            id="routine-name-input"
+            name="routineName"
+            label="Routine Name"
+            placeholder="e.g., Push Day"
+            value={routineNameInput}
+            onChange={(e) => setRoutineNameInput(e.target.value)}
+          />
+          <Field
+            id="routine-desc-input"
+            name="routineDescription"
+            label="Description (optional)"
+            placeholder="Short description..."
+            value={routineDescriptionInput}
+            onChange={(e) => setRoutineDescriptionInput(e.target.value)}
+          />
+        </div>
+      </Modal>
+
+      <Modal
+        open={showAssignDaysModal}
+        onClose={() => setShowAssignDaysModal(false)}
+        onConfirm={() => setShowAssignDaysModal(false)}
+        confirmText="Done"
+        cancelText="Cancel"
+        title="Assign Routine Days"
+      >
+        <div className="flex flex-col gap-3">
+          <p className="text-body-sm text-text-disabled">
+            Select which training days should run this routine. A day can only be assigned to one routine.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {workoutDays.map((day) => {
+              const selected = routines.find(r => r.id === routineForDayAssign)?.assignedDays?.includes(day)
+              return (
+                <button
+                  key={day}
+                  type="button"
+                  onClick={() => toggleRoutineDay(day)}
+                  className={cn(
+                    'px-4 py-2 rounded-lg text-body-sm font-semibold transition-colors border',
+                    selected
+                      ? 'bg-workout-prim text-neutral-white border-transparent'
+                      : 'bg-surface-primary border-border-primary text-text-body hover:border-neutral-400'
+                  )}
+                >
+                  {day}
+                </button>
+              )
+            })}
+          </div>
+        </div>
       </Modal>
 
       {/* Exercise Search & Selection Modal */}
@@ -694,6 +1093,9 @@ export default function CreatePlanPage() {
             <div className="px-6 py-5 border-b border-border-primary flex justify-between items-center bg-surface-primary rounded-t-3xl">
               <div>
                 <h3 className="text-heading-h6 font-bold text-text-headings">Add Exercises to Routine</h3>
+                <p className="text-[11px] font-semibold text-text-disabled mt-0.5">
+                  Routine: {activeRoutine?.name || '—'}
+                </p>
                 {hundredPercentBodyweight && (
                   <p className="text-[11px] font-semibold text-workout-prim mt-0.5">Filtering: Bodyweight Only</p>
                 )}
@@ -708,7 +1110,7 @@ export default function CreatePlanPage() {
             </div>
 
             {/* Search bar inside modal */}
-            <div className="p-4 border-b border-border-primary bg-neutral-50">
+            <div className="p-4 border-b border-border-primary bg-surface-primary">
               <div className="relative">
                 <input
                   type="text"
@@ -721,6 +1123,44 @@ export default function CreatePlanPage() {
               </div>
             </div>
 
+            {/* Muscle group + exercise type filters */}
+            <div className="px-4 py-3 border-b border-border-primary bg-neutral-100 flex flex-col gap-2">
+              <div className="flex flex-wrap gap-1.5">
+                {MUSCLE_GROUP_OPTIONS.map(opt => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setModalMuscleGroup(opt.value)}
+                    className={cn(
+                      'px-2.5 py-0.5 rounded-round text-body-sm font-semibold border transition-all',
+                      modalMuscleGroup === opt.value
+                        ? 'bg-workout-prim text-neutral-white border-transparent'
+                        : 'bg-surface-primary text-text-disabled border-border-primary hover:border-workout-prim hover:text-workout-prim'
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {EXERCISE_TYPE_OPTIONS.map(opt => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setModalExerciseType(opt.value)}
+                    className={cn(
+                      'px-2.5 py-0.5 rounded-round text-body-sm font-semibold border transition-all',
+                      modalExerciseType === opt.value
+                        ? 'bg-workout-prim-500 text-neutral-white border-transparent'
+                        : 'bg-surface-primary text-text-disabled border-border-primary hover:border-workout-prim hover:text-workout-prim'
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2">
               {exerciseSearchLoading ? (
                 <div className="py-12 flex flex-col items-center justify-center text-center">
@@ -729,16 +1169,12 @@ export default function CreatePlanPage() {
                 </div>
               ) : availableExercises.length > 0 ? (
                 availableExercises.map((ex) => {
-                  const isAdded = routineExercises.includes(ex.title)
+                  const isAdded = (activeRoutine?.exercises || []).some(item => item.exercise_id === ex.id)
                   return (
                     <div
                       key={ex.id}
                       onClick={() => {
-                        if (isAdded) {
-                          setRoutineExercises(prev => prev.filter(title => title !== ex.title))
-                        } else {
-                          setRoutineExercises(prev => [...prev, ex.title])
-                        }
+                        if (!isAdded) openExerciseConfig(ex)
                       }}
                       className={`flex items-center justify-between p-3.5 rounded-xl border transition-all cursor-pointer select-none ${
                         isAdded
@@ -772,19 +1208,37 @@ export default function CreatePlanPage() {
               )}
             </div>
 
-            <div className="border-t border-border-primary px-6 py-4 flex bg-neutral-50 shrink-0 rounded-b-3xl">
+            <div className="border-t border-border-primary px-6 py-4 flex bg-surface-primary shrink-0 rounded-b-3xl">
               <Button
                 type="button"
                 variant="workout-primary"
                 className="w-full shadow-md"
                 onClick={() => setShowExerciseSearchModal(false)}
               >
-                Done Adding ({routineExercises.length} selected)
+                Done Adding ({(activeRoutine?.exercises || []).length} selected)
               </Button>
             </div>
           </div>
         </div>
       )}
+
+      {/* Exercise Config Modal — z-[200] sits above the exercise search modal (z-[100]) */}
+      <Modal
+        open={showExerciseConfigModal}
+        onClose={() => setShowExerciseConfigModal(false)}
+        onConfirm={addExerciseToRoutine}
+        confirmText="Add Exercise"
+        cancelText="Cancel"
+        title={`Configure ${pendingExercise?.title || 'Exercise'}`}
+        zIndex="z-[200]"
+      >
+        <div className="grid grid-cols-2 gap-3">
+          <Field id="sets-input" name="sets" label="Sets" type="number" value={exerciseConfig.sets} onChange={(e) => setExerciseConfig(prev => ({ ...prev, sets: e.target.value }))} />
+          <Field id="reps-input" name="reps" label="Reps" type="number" value={exerciseConfig.reps} onChange={(e) => setExerciseConfig(prev => ({ ...prev, reps: e.target.value }))} />
+          <Field id="weight-input" name="weight" label="Weight (kg)" type="number" value={exerciseConfig.weight_kg} onChange={(e) => setExerciseConfig(prev => ({ ...prev, weight_kg: e.target.value }))} />
+          <Field id="rest-input" name="rest" label="Rest (seconds)" type="number" value={exerciseConfig.rest_time_seconds} onChange={(e) => setExerciseConfig(prev => ({ ...prev, rest_time_seconds: e.target.value }))} />
+        </div>
+      </Modal>
 
     </div>
   )

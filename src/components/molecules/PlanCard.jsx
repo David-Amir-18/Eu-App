@@ -67,6 +67,7 @@ function ClosestPreview({ label }) {
 // ── PlanCard ──────────────────────────────────────────────────────────────────
 export function PlanCard({
   id,
+  backendId,
   name,
   defaultTab = 'Diet',
   dateRange = 'Jan 01, 2026 → Feb 01, 2026 · 4 weeks',
@@ -191,7 +192,8 @@ export function PlanCard({
             <>
               <Button variant={cfg.btnOutline} size="sm" onClick={() => {
                 const type = planType.toLowerCase()
-                const planId = id || name.replace(/\s+/g, '-').toLowerCase()
+                // Use backendId (UUID) when available; fall back to id for mock/legacy plans
+                const planId = backendId || id || name.replace(/\s+/g, '-').toLowerCase()
                 navigate(`/plans/${type}/${planId}`)
               }}>View Plan</Button>
               <Button variant={cfg.btnPrimary} size="sm">{ctaLabel}</Button>
