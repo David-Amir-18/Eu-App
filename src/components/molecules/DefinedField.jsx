@@ -74,7 +74,7 @@ export function DefinedField({
         </label>
       )}
 
-      <div className="relative" ref={wrapperRef}>
+      <div className={cn('relative', open && 'z-[70]')} ref={wrapperRef}>
         {name && <input type="hidden" name={name} value={selectedValue} />}
 
         <button
@@ -121,7 +121,7 @@ export function DefinedField({
           <ul
             role="listbox"
             aria-label={label}
-            className="absolute z-50 mt-1 w-full rounded-md border border-border-primary bg-surface-primary shadow-lg max-h-48 overflow-y-auto"
+            className="absolute z-[80] mt-1 w-full rounded-md border border-border-primary bg-surface-primary shadow-lg max-h-48 overflow-y-auto"
           >
             {options.map((option) => (
               <li

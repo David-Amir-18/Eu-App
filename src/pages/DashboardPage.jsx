@@ -1,5 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
+import { MealTabBar } from '../components/organisms/MealTabBar.jsx'
+import { WorkoutRecommendationsSection } from '../components/organisms/WorkoutRecommendationsSection.jsx'
 import { PlanCard } from '../components/molecules/PlanCard.jsx'
 import { Button } from '../components/atoms/Button.jsx'
 import { cn } from '../components/utils.js'
@@ -275,6 +277,10 @@ export default function DashboardPage() {
       .finally(() => setProfileLoading(false))
   }, [userId])
 
+  const setActiveTab = (tab) => {
+    setSearchParams({ tab })
+  }
+
   return (
     <div className="flex flex-col min-h-screen">
       {/* Scrollable content */}
@@ -293,18 +299,18 @@ export default function DashboardPage() {
           <WeekCalendar today={today} />
         </section>
 
-        {/* Divider */}
-        <div className="h-px bg-border-primary" />
+            {/* Divider */}
+            <div className="h-px bg-border-primary" />
 
-        {/* Your Plans */}
-        <section className="flex flex-col gap-6" aria-label="Your Plans">
-          <h2 className="text-heading-h4 font-bold text-text-headings">Your Plans</h2>
+            {/* Your Plans */}
+            <section className="flex flex-col gap-6" aria-label="Your Plans">
+              <h2 className="text-heading-h4 font-bold text-text-headings">Your Plans</h2>
 
-          <div className="flex flex-col gap-4">
-            {PLANS.map((plan) => (
-              <PlanCard key={plan.id} {...plan} />
-            ))}
-          </div>
+              <div className="flex flex-col gap-4">
+                {PLANS.map((plan) => (
+                  <PlanCard key={plan.id} {...plan} />
+                ))}
+              </div>
 
           {/* Create new plan CTA */}
           {/* <div className="border border-border-primary border-dashed rounded-lg px-8 py-10 flex flex-col items-center gap-3 bg-neutral-100 hover:bg-surface-action-hover2 transition-colors">

@@ -1,94 +1,55 @@
 import { useState, useEffect } from 'react'
 import { Button } from '../components/atoms/Button.jsx'
-import { cn } from '../components/utils.js'
 import { DefinedField } from '../components/molecules/DefinedField.jsx'
+import { getExercises } from '../api/exercisesService.js'
 
+const PAGE_SIZE = 20
 
-const EXERCISE_DATABASE = [
-  {
-    id: "4F5866F8",
-    title: "Back Extension (Hyperextension)",
-    muscle_group: "lower_back",
-    other_muscles: ["hamstrings", "glutes"],
-    exercise_type: "reps_only",
-    equipment_category: "machine",
-    url: "https://d2l9nsnmtah87f.cloudfront.net/exercise-assets/18601201-Hyperextension-(VERSION-2)_Hips.mp4",
-    media_type: "video",
-    manual_tag: "hyper extension",
-    thumbnail_url: "https://d2l9nsnmtah87f.cloudfront.net/exercise-thumbnails/18601201-Hyperextension-(VERSION-2)_Hips_thumbnail@3x.jpg",
-    is_custom: false,
-    is_archived: false,
-    hundred_percent_bodyweight_exercise: false,
-    instructions: "1. Set yourself up on a back extension machine. Have your hips and thighs against the pad and your ankles locked on the foot brace.\n2. Engage your abs, cross your arms in front of your chest, and take a breath.\n3. Lower yourself by bending at the hips and move down until you feel a stretch in your hamstrings and glutes.\n4. Engage your buttocks and lower back to raise your torso to the top position, pausing for a moment and exhaling."
-  },
-  {
-    id: "79D0BB3A",
-    title: "Bench Press (Barbell)",
-    muscle_group: "chest",
-    other_muscles: ["triceps", "shoulders"],
-    exercise_type: "weight_reps",
-    equipment_category: "barbell",
-    url: "https://d2l9nsnmtah87f.cloudfront.net/exercise-assets/00251201-Barbell-Bench-Press_Chest.mp4",
-    media_type: "video",
-    manual_tag: "chest bb",
-    thumbnail_url: "https://d2l9nsnmtah87f.cloudfront.net/exercise-thumbnails/00251201-Barbell-Bench-Press_Chest_thumbnail@3x.jpg",
-    is_custom: false,
-    is_archived: false,
-    hundred_percent_bodyweight_exercise: false,
-    instructions: "1. Lie on the bench.\n2. Extend your arms and grab the bar evenly, having your hands slightly wider than shoulder-width apart.\n3. Bring your shoulder blades back and dig them into the bench.\n4. Arch your lower back and plant your feet flat on the floor.\n5. Take a breath, unrack the bar, and bring it over your chest.\n6. Inhale again and lower the barbell to your lower chest, tapping it slightly. \n7. Hold for a moment and press the bar until your elbows are straight. Exhale."
-  },
-  {
-    id: "55E6546F",
-    title: "Bent Over Row (Barbell)",
-    muscle_group: "upper_back",
-    other_muscles: ["lats", "biceps", "forearms"],
-    exercise_type: "weight_reps",
-    equipment_category: "barbell",
-    url: "https://d2l9nsnmtah87f.cloudfront.net/exercise-assets/00271201-Barbell-Bent-Over-Row_Back.mp4",
-    media_type: "video",
-    manual_tag: "bb",
-    thumbnail_url: "https://d2l9nsnmtah87f.cloudfront.net/exercise-thumbnails/00271201-Barbell-Bent-Over-Row_Back_thumbnail@3x.jpg",
-    is_custom: false,
-    is_archived: false,
-    hundred_percent_bodyweight_exercise: false,
-    instructions: "1. Stand in front of a loaded barbell with your feet in a comfortable stance and toes pointing slightly out.\n2. Lean forward by hinging at the hip and keep your spine in a neutral position.\n3. Grab the barbell with an even overhand grip.\n4. Engage your abs and lift the bar several inches off the floor.\n5. With your shoulders back and midsection tight, take a breath and row the barbell.\n6. Lift the bar until it taps your stomach and hold the position for a moment as you exhale.\n7. Lower the bar slowly."
-  },
-  {
-    id: "A5AC6449",
-    title: "Bicep Curl (Barbell)",
-    muscle_group: "biceps",
-    other_muscles: [],
-    exercise_type: "weight_reps",
-    equipment_category: "barbell",
-    url: "https://d2l9nsnmtah87f.cloudfront.net/exercise-assets/00311201-Barbell-Curl_Upper-Arms.mp4",
-    media_type: "video",
-    manual_tag: "curls biceps standing bb",
-    thumbnail_url: "https://d2l9nsnmtah87f.cloudfront.net/exercise-thumbnails/00311201-Barbell-Curl_Upper-Arms_thumbnail@3x.jpg",
-    is_custom: false,
-    is_archived: false,
-    hundred_percent_bodyweight_exercise: false,
-    instructions: "1. Pick the bar up and hold it with a grip slightly wider than your hips. Your arms should be straight, with your palms facing forward.\n2. Straighten your back, bring your chest out, take a breath, and curl the barbell, exhaling at the top. Don’t use body swinging and momentum to lift the bar; only your bicep strength.\n3. Lower the bar slowly as you breathe in, extending your arms and stretching your biceps.\n4. Repeat."
-  }
+const MUSCLE_OPTIONS = [
+  { value: 'all', label: 'All Muscles' },
+  { value: 'chest', label: 'Chest' },
+  { value: 'shoulders', label: 'Shoulders' },
+  { value: 'upper_back', label: 'Upper Back' },
+  { value: 'lower_back', label: 'Lower Back' },
+  { value: 'lats', label: 'Lats' },
+  { value: 'abs', label: 'Abs' },
+  { value: 'obliques', label: 'Obliques' },
+  { value: 'biceps', label: 'Biceps' },
+  { value: 'triceps', label: 'Triceps' },
+  { value: 'forearms', label: 'Forearms' },
+  { value: 'quadriceps', label: 'Quadriceps' },
+  { value: 'hamstrings', label: 'Hamstrings' },
+  { value: 'glutes', label: 'Glutes' },
+  { value: 'calves', label: 'Calves' },
 ]
 
-const ANATOMICAL_REGIONS = [
-  { id: 'all', label: 'All Muscles' },
-  { id: 'chest_shoulders', label: 'Chest & Shoulders', subMuscles: ['chest', 'shoulders'] },
-  { id: 'back_core', label: 'Back & Core', subMuscles: ['lower_back', 'upper_back', 'lats', 'abs', 'obliques'] },
-  { id: 'arms', label: 'Arms', subMuscles: ['biceps', 'triceps', 'forearms'] },
-  { id: 'legs', label: 'Legs', subMuscles: ['hamstrings', 'glutes', 'quadriceps', 'calves'] }
+const TYPE_OPTIONS = [
+  { value: 'all', label: 'All Types' },
+  { value: 'weight_reps', label: 'Weight + Reps' },
+  { value: 'reps_only', label: 'Reps Only' },
+  { value: 'duration', label: 'Duration' },
 ]
+
 const EQUIPMENT_OPTIONS = [
   { value: 'all', label: 'All Equipment' },
+  { value: 'barbell', label: 'Barbell' },
+  { value: 'dumbbell', label: 'Dumbbell' },
   { value: 'machine', label: 'Machine' },
-  { value: 'barbell', label: 'Barbell' }
+  { value: 'none', label: 'No Equipment' },
 ]
 
 export default function WorkoutsPage() {
-  const [activeRegion, setActiveRegion] = useState('all')
+  const [activeMuscle, setActiveMuscle] = useState('all')
   const [activeEquipment, setActiveEquipment] = useState('all')
+  const [activeType, setActiveType] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedExercise, setSelectedExercise] = useState(null)
+  const [exercises, setExercises] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [fetchError, setFetchError] = useState('')
+  const [page, setPage] = useState(1)
+  const [pages, setPages] = useState(0)
+  const [total, setTotal] = useState(0)
 
   // Plans / Add-to-Plan State
   const [userPlans, setUserPlans] = useState([])
@@ -97,6 +58,33 @@ export default function WorkoutsPage() {
   const [targetPlanId, setTargetPlanId] = useState('')
   const [targetRoutineId, setTargetRoutineId] = useState('')
   const [toastMessage, setToastMessage] = useState('')
+
+  useEffect(() => {
+    setPage(1)
+  }, [searchQuery, activeMuscle, activeEquipment, activeType])
+
+  useEffect(() => {
+    setLoading(true)
+    setFetchError('')
+    const timer = setTimeout(() => {
+      getExercises({
+        page,
+        pageSize: PAGE_SIZE,
+        search: searchQuery || undefined,
+        muscleGroup: activeMuscle !== 'all' ? activeMuscle : undefined,
+        equipmentCategory: activeEquipment !== 'all' ? activeEquipment : undefined,
+        exerciseType: activeType !== 'all' ? activeType : undefined,
+      })
+        .then((data) => {
+          setExercises(data.items || [])
+          setPages(data.pages || 0)
+          setTotal(data.total || 0)
+        })
+        .catch((err) => setFetchError(err.message || 'Failed to load exercises'))
+        .finally(() => setLoading(false))
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [page, searchQuery, activeMuscle, activeEquipment, activeType])
 
   // Load plans on component mount
   useEffect(() => {
@@ -126,16 +114,6 @@ export default function WorkoutsPage() {
       setTargetRoutineId(activeDays[0])
     }
   }
-
-  // Filtered Exercises based on Anatomical Region + Equipment Category + Search query
-  const filteredExercises = EXERCISE_DATABASE.filter(ex => {
-    const region = ANATOMICAL_REGIONS.find(r => r.id === activeRegion)
-    const matchesMuscle = activeRegion === 'all' || (region && region.subMuscles.includes(ex.muscle_group))
-    const matchesEquipment = activeEquipment === 'all' || ex.equipment_category === activeEquipment
-    const matchesSearch = ex.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (ex.manual_tag && ex.manual_tag.toLowerCase().includes(searchQuery.toLowerCase()))
-    return matchesMuscle && matchesEquipment && matchesSearch
-  })
 
   // Add exercise to selected Workout Plan & Routine in LocalStorage
   const handleAddExerciseToPlan = () => {
@@ -193,6 +171,12 @@ export default function WorkoutsPage() {
     return inst || []
   }
 
+  const getImageSrc = (exercise) => {
+    if (exercise.thumbnail_url) return exercise.thumbnail_url
+    if (exercise.url && (exercise.media_type === 'image' || exercise.media_type === 'gif')) return exercise.url
+    return null
+  }
+
   return (
     <div className="flex flex-col min-h-screen bg-neutral-100 relative">
 
@@ -205,7 +189,7 @@ export default function WorkoutsPage() {
       )}
 
       {/* ── Header Area ── */}
-      <div className="bg-surface-primary border-b border-border-primary pt-12 pb-8 px-8 md:px-12 relative overflow-hidden animate-fade-in">
+      <div className="bg-surface-primary border-b border-border-primary pt-12 pb-8 px-8 md:px-12 relative z-30 overflow-visible animate-fade-in">
         <div className="absolute top-[-50px] right-[-50px] w-64 h-64 bg-workout-prim/10 rounded-full opacity-30 blur-3xl" />
         <div className="absolute bottom-[-50px] left-[10%] w-48 h-48 bg-workout-prim-100/20 rounded-full opacity-25 blur-3xl" />
 
@@ -244,30 +228,61 @@ export default function WorkoutsPage() {
           </div>
         </div>
 
-        {/* Muscle Filter Tabs */}
-        <div className="flex flex-wrap gap-2 mt-8 bg-neutral-100 p-1.5 rounded-xl border border-border-primary w-fit relative z-10">
-          {ANATOMICAL_REGIONS.map(region => (
-            <button
-              key={region.id}
-              onClick={() => setActiveRegion(region.id)}
-              className={cn(
-                "px-4 py-1.5 rounded-lg text-body-sm font-semibold transition-all",
-                activeRegion === region.id
-                  ? "bg-surface-primary text-workout-prim shadow-sm border border-border-primary"
-                  : "text-text-disabled hover:text-text-headings"
-              )}
-            >
-              {region.label}
-            </button>
-          ))}
+        <div className="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-w-4xl relative z-10">
+          <DefinedField
+            id="muscle-filter"
+            label=""
+            value={activeMuscle}
+            onChange={setActiveMuscle}
+            options={MUSCLE_OPTIONS}
+            className="[&>label]:hidden"
+          />
+          <DefinedField
+            id="type-filter"
+            label=""
+            value={activeType}
+            onChange={setActiveType}
+            options={TYPE_OPTIONS}
+            className="[&>label]:hidden"
+          />
+          <Button
+            variant="outline"
+            size="md"
+            onClick={() => {
+              setSearchQuery('')
+              setActiveMuscle('all')
+              setActiveEquipment('all')
+              setActiveType('all')
+            }}
+          >
+            Clear Filters
+          </Button>
         </div>
       </div>
 
       {/* ── Grid List Content ── */}
-      <div className="flex-1 overflow-auto px-8 py-8 md:px-12 animate-fade-in" style={{ animationDelay: '0.1s' }}>
-        {filteredExercises.length > 0 ? (
+      <div className="flex-1 relative z-0 overflow-auto px-8 py-8 md:px-12 animate-fade-in" style={{ animationDelay: '0.1s' }}>
+        {loading && (
+          <div className="py-24 flex flex-col items-center justify-center text-center">
+            <div className="w-10 h-10 rounded-full border-4 border-workout-prim border-t-transparent animate-spin mb-4" />
+            <p className="text-body-md font-semibold text-text-disabled">Loading exercises...</p>
+          </div>
+        )}
+
+        {!loading && fetchError && (
+          <div className="py-20 flex flex-col items-center justify-center text-center border border-error-300 border-dashed rounded-2xl bg-surface-error max-w-xl mx-auto">
+            <p className="text-body-lg font-semibold text-error-500 mb-2">Failed to load exercises</p>
+            <p className="text-body-md text-text-disabled">{fetchError}</p>
+          </div>
+        )}
+
+        {!loading && !fetchError && exercises.length > 0 ? (
+          <>
+          <div className="mb-4 text-body-sm text-text-disabled font-semibold">
+            Showing page {page} of {pages} ({total} total)
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filteredExercises.map(ex => (
+            {exercises.map(ex => (
               <div
                 key={ex.id}
                 className="group flex flex-col rounded-2xl border border-border-primary bg-surface-primary overflow-hidden shadow-sm hover:shadow-lg hover:scale-[1.01] transition-all duration-300 cursor-pointer"
@@ -275,7 +290,13 @@ export default function WorkoutsPage() {
               >
                 {/* Exercise Cover Photo */}
                 <div className="relative h-44 overflow-hidden shrink-0 bg-neutral-900">
-                  <img src={ex.thumbnail_url} alt={ex.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-90" />
+                  {getImageSrc(ex) ? (
+                    <img src={getImageSrc(ex)} alt={ex.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-90" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-body-sm font-semibold text-neutral-white bg-neutral-700">
+                      No preview
+                    </div>
+                  )}
                   <div className="absolute inset-0 bg-gradient-to-t from-neutral-black/60 to-transparent" />
                   <span className="absolute top-3 right-3 bg-workout-prim-100 text-workout-prim text-body-xs font-bold px-2.5 py-1 rounded-round shadow-sm capitalize">
                     {ex.equipment_category}
@@ -294,18 +315,18 @@ export default function WorkoutsPage() {
                       {ex.title}
                     </h3>
                     <p className="text-body-xs text-text-disabled capitalize">
-                      Primary: {ex.muscle_group.replace('_', ' ')}
+                      Primary: {ex.muscle_group?.replace('_', ' ')}
                     </p>
                   </div>
 
                   {/* Muscles row tags */}
                   <div className="flex flex-wrap gap-1 min-h-12 items-center">
                     <span className="text-[10px] bg-neutral-100 border border-border-primary text-text-body font-semibold px-2 py-0.5 rounded-md capitalize">
-                      {ex.muscle_group.replace('_', ' ')}
+                      {ex.muscle_group?.replace('_', ' ')}
                     </span>
-                    {ex.other_muscles.map(m => (
-                      <span key={m} className="text-[10px] bg-neutral-50 border border-border-primary text-text-disabled font-medium px-2 py-0.5 rounded-md capitalize">
-                        {m}
+                    {ex.secondary_muscles?.map(m => (
+                      <span key={m.id} className="text-[10px] bg-neutral-50 border border-border-primary text-text-disabled font-medium px-2 py-0.5 rounded-md capitalize">
+                        {m.muscle_name}
                       </span>
                     ))}
                   </div>
@@ -327,7 +348,32 @@ export default function WorkoutsPage() {
               </div>
             ))}
           </div>
+          {pages > 1 && (
+            <div className="mt-8 flex items-center justify-center gap-3">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page <= 1}
+                onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+              >
+                Previous
+              </Button>
+              <span className="text-body-sm font-semibold text-text-body px-2">
+                {page} / {pages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page >= pages}
+                onClick={() => setPage((prev) => Math.min(pages, prev + 1))}
+              >
+                Next
+              </Button>
+            </div>
+          )}
+          </>
         ) : (
+          !loading && !fetchError &&
           <div className="py-20 flex flex-col items-center justify-center text-center border border-border-primary border-dashed rounded-2xl bg-surface-primary opacity-80 max-w-xl mx-auto">
             <p className="text-body-lg font-semibold text-text-disabled mb-2">No exercises found matching your criteria.</p>
             <p className="text-body-md text-text-disabled">Try resetting the muscle group, changing equipment filters, or searching another keyword.</p>
@@ -343,7 +389,7 @@ export default function WorkoutsPage() {
 
             {/* Header / Video Banner */}
             <div className="relative h-72 shrink-0 overflow-hidden bg-neutral-900">
-              {selectedExercise.url ? (
+              {selectedExercise.media_type === 'video' && selectedExercise.url ? (
                 <video
                   src={selectedExercise.url}
                   poster={selectedExercise.thumbnail_url}
@@ -355,7 +401,7 @@ export default function WorkoutsPage() {
                   className="w-full h-full object-cover"
                 />
               ) : (
-                <img src={selectedExercise.thumbnail_url} alt={selectedExercise.title} className="w-full h-full object-cover" />
+                <img src={getImageSrc(selectedExercise)} alt={selectedExercise.title} className="w-full h-full object-cover" />
               )}
               <div className="absolute top-0 inset-x-0 bg-gradient-to-b from-neutral-black/60 to-transparent p-4 flex justify-between items-center z-10 pointer-events-none">
                 <span className="bg-workout-prim text-neutral-white text-body-xs font-bold px-3 py-1 rounded-full shadow-md uppercase tracking-wide capitalize pointer-events-auto">
@@ -377,10 +423,10 @@ export default function WorkoutsPage() {
                 <h2 className="text-heading-h4 font-bold text-text-headings leading-tight">{selectedExercise.title}</h2>
                 <div className="flex gap-2 mt-2 flex-wrap">
                   <span className="text-body-sm font-semibold bg-workout-prim-100 text-workout-prim px-3 py-1 rounded-lg capitalize">
-                    Primary: {selectedExercise.muscle_group.replace('_', ' ')}
+                    Primary: {selectedExercise.muscle_group?.replace('_', ' ')}
                   </span>
                   <span className="text-body-sm font-semibold bg-neutral-100 text-text-body px-3 py-1 rounded-lg capitalize">
-                    {selectedExercise.exercise_type.replace('_', ' ')}
+                    {selectedExercise.exercise_type?.replace('_', ' ')}
                   </span>
                 </div>
               </div>
@@ -391,12 +437,12 @@ export default function WorkoutsPage() {
                 <div className="flex flex-wrap gap-2">
                   <div className="flex items-center gap-1.5 px-3 py-1.5 bg-workout-prim-100 text-workout-prim rounded-xl text-body-sm font-semibold capitalize border border-workout-prim-100">
                     <span className="w-2 h-2 rounded-full bg-workout-prim shrink-0" />
-                    Primary: {selectedExercise.muscle_group.replace('_', ' ')}
+                    Primary: {selectedExercise.muscle_group?.replace('_', ' ')}
                   </div>
-                  {selectedExercise.other_muscles.map(m => (
-                    <div key={m} className="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-100 text-text-disabled rounded-xl text-body-sm font-medium capitalize border border-border-primary">
+                  {selectedExercise.secondary_muscles?.map(m => (
+                    <div key={m.id} className="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-100 text-text-disabled rounded-xl text-body-sm font-medium capitalize border border-border-primary">
                       <span className="w-2 h-2 rounded-full bg-neutral-400 shrink-0" />
-                      Secondary: {m}
+                      Secondary: {m.muscle_name}
                     </div>
                   ))}
                 </div>
@@ -421,15 +467,15 @@ export default function WorkoutsPage() {
             {/* Modal Footer Actions */}
             <div className="border-t border-border-primary px-8 py-5 shrink-0 flex gap-4 bg-neutral-100">
               <Button
-                variant="neutral"
-                className="flex-1 font-bold border border-border-primary bg-surface-primary text-text-body hover:bg-neutral-100"
+                variant="outline"
+                className="flex-1"
                 onClick={() => setSelectedExercise(null)}
               >
                 Close Details
               </Button>
               <Button
-                variant="primary"
-                className="flex-1 font-bold bg-workout-prim hover:bg-workout-prim-600 text-neutral-white shadow-md"
+                variant="workout-primary"
+                className="flex-1 shadow-md"
                 onClick={() => {
                   setExerciseToAddToPlan(selectedExercise)
                   setSelectedExercise(null)
@@ -494,15 +540,15 @@ export default function WorkoutsPage() {
 
             <div className="border-t border-border-primary px-6 py-4 flex gap-3 bg-neutral-100 shrink-0 rounded-b-3xl">
               <Button
-                variant="neutral"
-                className="flex-1 font-bold border border-border-primary bg-surface-primary text-text-body"
+                variant="outline"
+                className="flex-1"
                 onClick={() => setShowAddToPlanModal(false)}
               >
                 Cancel
               </Button>
               <Button
-                variant="primary"
-                className="flex-1 font-bold bg-workout-prim hover:bg-workout-prim-600 text-neutral-white shadow-md"
+                variant="workout-primary"
+                className="flex-1 shadow-md"
                 disabled={userPlans.length === 0}
                 onClick={handleAddExerciseToPlan}
               >
