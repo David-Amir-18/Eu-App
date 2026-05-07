@@ -104,7 +104,7 @@ export function DashboardSidebar() {
 
   useEffect(() => {
     if (!userId) return
-    getUserMetrics(userId)
+    getUserMetrics()
       .then(setProfile)
       .catch(() => setProfile(null))
   }, [userId])
@@ -161,6 +161,13 @@ export function DashboardSidebar() {
       {/* Logout */}
       <div className="px-3 py-4 border-t border-border-primary">
         <button
+          onClick={() => {
+            localStorage.removeItem('token')
+            localStorage.removeItem('refresh_token')
+            localStorage.removeItem('user_id')
+            localStorage.removeItem('username')
+            window.location.href = '/login'
+          }}
           className="flex items-center gap-3 px-3 py-2 rounded-lg text-body-md font-semibold text-error-500 hover:bg-surface-error transition-colors w-full"
           aria-label="Logout"
         >

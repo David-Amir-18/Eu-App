@@ -19,8 +19,9 @@ export default function LoginPage() {
     try {
       const data = await login(username, password)
       localStorage.setItem('token', data.access_token)
-      localStorage.setItem('user_id', data.user_id)
-      localStorage.setItem('username', username)
+      if (data.refresh_token) localStorage.setItem('refresh_token', data.refresh_token)
+      localStorage.setItem('user_id', data.user?.id || '')
+      localStorage.setItem('username', data.user?.name || username)
       window.location.href = '/dashboard'
     } catch (err) {
       setError(err.message || 'Something went wrong. Please try again.')
@@ -49,8 +50,8 @@ export default function LoginPage() {
         <Field
           id="username"
           name="username"
-          label="Username"
-          placeholder="Enter your username"
+          label="Email or Username"
+          placeholder="Enter your email or username"
           required
           value={username}
           onChange={(e) => setUsername(e.target.value)}
