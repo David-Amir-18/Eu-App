@@ -7,7 +7,6 @@ import RegisterPage from './pages/RegisterPage.jsx'
 import OnboardingPage from './pages/OnboardingPage.jsx'
 import Contact from './pages/Contact.jsx'
 import DashboardPage from './pages/DashboardPage.jsx'
-import Contact from "./pages/Contact.jsx"
 import WorkoutPlanPage from './pages/WorkoutPlanPage.jsx'
 import MealPlanPage from './pages/MealPlanPage.jsx'
 
@@ -16,7 +15,7 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        
+
         <Route element={<AppLayout />}>
           <Route index element={<Home />} />
         </Route>
