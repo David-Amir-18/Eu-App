@@ -1,11 +1,17 @@
 import { cn } from '../utils.js'
 
 const variantClasses = {
-  primary: 'bg-surface-action text-text-on-action hover:bg-surface-action-hover',
-  secondary: 'bg-secondary-400 text-neutral-white hover:bg-secondary-500',
-  outline: 'border border-border-action text-text-action hover:bg-surface-action-hover2',
-  ghost: 'text-text-action hover:bg-surface-action-hover2',
-  danger: 'bg-error-500 text-neutral-white hover:bg-error-600',
+  primary:          'bg-surface-action text-text-on-action hover:bg-surface-action-hover',
+  secondary:        'bg-secondary-400 text-neutral-white hover:bg-secondary-500',
+  outline:          'border border-border-action text-text-action hover:bg-surface-action-hover2',
+  ghost:            'text-text-action hover:bg-surface-action-hover2',
+  danger:           'bg-error-500 text-neutral-white hover:bg-error-600',
+  'meals-primary':  'bg-meals-prim text-neutral-white hover:bg-meals-prim-600',
+  'meals-outline':  'border border-meals-prim text-meals-prim hover:bg-meals-prim-100',
+  'workout-primary':'bg-workout-prim text-neutral-white hover:bg-workout-prim-500',
+  'workout-outline':'border border-workout-prim text-workout-prim hover:bg-workout-prim-100',
+  'rehab-primary':  'bg-rehab-prim text-neutral-white hover:bg-rehab-prim-500',
+  'rehab-outline':  'border border-rehab-prim text-rehab-prim hover:bg-rehab-prim-100',
 }
 
 const sizeClasses = {
@@ -15,11 +21,17 @@ const sizeClasses = {
 }
 
 const spinnerColorClasses = {
-  primary: 'text-neutral-white',
-  secondary: 'text-neutral-white',
-  danger: 'text-neutral-white',
-  outline: 'text-text-action',
-  ghost: 'text-text-action',
+  primary:          'text-neutral-white',
+  secondary:        'text-neutral-white',
+  danger:           'text-neutral-white',
+  outline:          'text-text-action',
+  ghost:            'text-text-action',
+  'meals-primary':  'text-neutral-white',
+  'meals-outline':  'text-meals-prim',
+  'workout-primary':'text-neutral-white',
+  'workout-outline':'text-workout-prim',
+  'rehab-primary':  'text-neutral-white',
+  'rehab-outline':  'text-rehab-prim',
 }
 
 function Spinner({ variant }) {
@@ -31,19 +43,8 @@ function Spinner({ variant }) {
       viewBox="0 0 24 24"
       aria-hidden="true"
     >
-      <circle
-        className="opacity-25"
-        cx="12"
-        cy="12"
-        r="10"
-        stroke="currentColor"
-        strokeWidth="4"
-      />
-      <path
-        className="opacity-75"
-        fill="currentColor"
-        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-      />
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
     </svg>
   )
 }

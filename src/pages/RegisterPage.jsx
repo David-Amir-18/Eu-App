@@ -6,7 +6,7 @@ import { register } from '../api/authService'
 
 export default function RegisterPage() {
   const navigate = useNavigate()
-  const [form, setForm] = useState({ username: '', email: '', password: '', confirm: '' })
+  const [form, setForm] = useState({ fullName: '', username: '', email: '', password: '', confirm: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -29,7 +29,11 @@ export default function RegisterPage() {
 
     setLoading(true)
     try {
-      await register(form.username, form.email, form.password)
+      const data = await register(form.fullName, form.username, form.email, form.password)
+      localStorage.setItem('token', data.access_token)
+      if (data.refresh_token) localStorage.setItem('refresh_token', data.refresh_token)
+      localStorage.setItem('user_id', data.user?.id || '')
+      localStorage.setItem('username', data.user?.name || form.username)
       navigate('/onboarding')
     } catch (err) {
       setError(err.message || 'Something went wrong. Please try again.')
@@ -56,6 +60,15 @@ export default function RegisterPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+        <Field
+          id="fullName"
+          name="fullName"
+          label="Full Name"
+          placeholder="Enter your full name"
+          required
+          value={form.fullName}
+          onChange={handleChange}
+        />
         <Field
           id="username"
           name="username"

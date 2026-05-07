@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '../components/atoms/Button'
 import { Field } from '../components/atoms/Field'
+import { saveUserMetrics } from '../api/authService'
 
 const STEPS = ['welcome', 'age', 'weight', 'height', 'illness', 'done']
 const METRIC_STEPS = ['age', 'weight', 'height', 'illness']
@@ -92,9 +93,31 @@ export default function OnboardingPage() {
     next()
   }
 
-  function finish() {
-    // TODO: send form data to backend when endpoint is ready
-    navigate('/dashboard')
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
+
+  async function finish() {
+    const userId = localStorage.getItem('user_id')
+    if (!userId) { navigate('/dashboard'); return }
+
+    setSaving(true)
+    setSaveError('')
+    try {
+      await saveUserMetrics({
+        age: Number(form.age),
+        weight: parseFloat(form.weight),
+        height: parseFloat(form.height),
+        primary_goal: 'General',
+        fitness_level: 'Beginner',
+        activity_level: 'Sedentary',
+        ...(form.illness ? { medical_diet_notes: form.illness } : {}),
+      })
+      navigate('/dashboard')
+    } catch (err) {
+      setSaveError(err.message || 'Failed to save profile. Please try again.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -239,7 +262,10 @@ export default function OnboardingPage() {
                 </div>
               ))}
             </div>
-            <Button size="lg" fullWidth onClick={finish} className="mt-2">
+            {saveError && (
+              <p className="text-body-sm text-text-error">{saveError}</p>
+            )}
+            <Button size="lg" fullWidth loading={saving} onClick={finish} className="mt-2">
               Go to dashboard
             </Button>
           </div>

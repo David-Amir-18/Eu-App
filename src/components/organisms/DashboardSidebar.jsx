@@ -1,7 +1,20 @@
 import { NavLink } from 'react-router-dom'
+import { useEffect, useState } from 'react'
 import { cn } from '../utils.js'
+import { getUserMetrics } from '../../api/authService.js'
 
 // ── Icons ──────────────────────────────────────────────────────────────────────
+function IconDashboard() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="3" width="7" height="9" rx="1" />
+      <rect x="14" y="3" width="7" height="5" rx="1" />
+      <rect x="14" y="12" width="7" height="9" rx="1" />
+      <rect x="3" y="16" width="7" height="5" rx="1" />
+    </svg>
+  )
+}
 function IconMeals() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none"
@@ -41,6 +54,33 @@ function IconLogout() {
     <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none"
       stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" />
+    </svg>
+  )
+}
+function IconPlans() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 6h16M4 12h16M4 18h7" />
+    </svg>
+  )
+}
+function IconNotifications() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+    </svg>
+  )
+}
+function IconHelp() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="10" />
+      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+      <line x1="12" y1="17" x2="12.01" y2="17" />
     </svg>
   )
 }
@@ -88,16 +128,34 @@ function StatRow({ label, value, max }) {
 
 // ── Nav items ──────────────────────────────────────────────────────────────────
 const navItems = [
-  { to: '/dashboard', label: 'Meals',     icon: <IconMeals />,    end: true },
-  { to: '/dashboard?tab=workouts',  label: 'Workouts',  icon: <IconWorkouts />, end: false },
-  { to: '/profile',   label: 'Profile',   icon: <IconProfile />,  end: false },
+  { to: '/dashboard', label: 'Dashboard', icon: <IconDashboard />, end: true },
+  { to: '/meals',     label: 'Meals',     icon: <IconMeals />,    end: false },
+  { to: '/workouts',  label: 'Workouts',  icon: <IconWorkouts />, end: false },
+  { to: '/plans',     label: 'Plans',     icon: <IconPlans />,    end: false },
+  { to: '/profile',   label: 'Account',   icon: <IconProfile />,  end: false },
+  { to: '/notifications', label: 'Notifications', icon: <IconNotifications />, end: false },
   { to: '/settings',  label: 'Settings',  icon: <IconSettings />, end: false },
+  { to: '/help',      label: 'Help',      icon: <IconHelp />,     end: false },
 ]
 
 // ── Component ──────────────────────────────────────────────────────────────────
 export function DashboardSidebar() {
+  const [profile, setProfile] = useState(null)
+  const userId = localStorage.getItem('user_id')
+  const username = localStorage.getItem('username') || 'User'
+
+  useEffect(() => {
+    if (!userId) return
+    getUserMetrics()
+      .then(setProfile)
+      .catch(() => setProfile(null))
+  }, [userId])
+
+  const streak = profile?.CurrentStreak ?? 0
+  const calorieTarget = profile?.DailyCalorieTarget ?? 2000
+
   return (
-    <aside className="w-60 shrink-0 min-h-screen bg-surface-primary border-r border-border-primary flex flex-col">
+    <aside className="fixed top-0 left-0 w-60 h-screen bg-surface-primary border-r border-border-primary flex flex-col overflow-y-auto z-40">
 
       {/* Logo */}
       <div className="flex items-center gap-3 px-5 py-5 border-b border-border-primary">
@@ -110,13 +168,13 @@ export function DashboardSidebar() {
       {/* Streaks */}
       <div className="px-5 py-4 border-b border-border-primary flex flex-col gap-3">
         <p className="text-body-sm font-bold text-text-disabled uppercase tracking-widest">Statistics</p>
-        <StreakBadge label="Meals Streak" count={21} />
-        <StreakBadge label="Workout Streak" count={10} />
+        <StreakBadge label="Meals Streak" count={streak} />
+        <StreakBadge label="Workout Streak" count={streak} />
       </div>
 
       {/* Quick stats */}
       <div className="px-5 py-4 border-b border-border-primary flex flex-col gap-3">
-        <StatRow label="Today's Calories" value={500} max={2100} />
+        <StatRow label="Today's Calories" value={0} max={calorieTarget} />
         <StatRow label="Today's Workout" value={3} max={5} />
       </div>
 
@@ -145,6 +203,13 @@ export function DashboardSidebar() {
       {/* Logout */}
       <div className="px-3 py-4 border-t border-border-primary">
         <button
+          onClick={() => {
+            localStorage.removeItem('token')
+            localStorage.removeItem('refresh_token')
+            localStorage.removeItem('user_id')
+            localStorage.removeItem('username')
+            window.location.href = '/login'
+          }}
           className="flex items-center gap-3 px-3 py-2 rounded-lg text-body-md font-semibold text-error-500 hover:bg-surface-error transition-colors w-full"
           aria-label="Logout"
         >

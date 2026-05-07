@@ -8,6 +8,14 @@ import OnboardingPage from './pages/OnboardingPage.jsx'
 import Contact from './pages/Contact.jsx'
 
 import DashboardPage from './pages/DashboardPage.jsx'
+import WorkoutPlanPage from './pages/WorkoutPlanPage.jsx'
+import MealPlanPage from './pages/MealPlanPage.jsx'
+import ProfilePage from './pages/ProfilePage.jsx'
+import PlansPage from './pages/PlansPage.jsx'
+import MealsPage from './pages/MealsPage.jsx'
+import RehabPlanPage from './pages/RehabPlanPage.jsx'
+import CreatePlanPage from './pages/CreatePlanPage.jsx'
+import WorkoutsPage from './pages/WorkoutsPage.jsx'
 
 
 function App() {
@@ -21,6 +29,14 @@ function App() {
 
         <Route element={<DashboardLayout />}>
           <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/meals" element={<MealsPage />} />
+          <Route path="/workouts" element={<WorkoutsPage />} />
+          <Route path="/plans" element={<PlansPage />} />
+          <Route path="/plans/create" element={<CreatePlanPage />} />
+          <Route path="/plans/workout/:id" element={<WorkoutPlanPage />} />
+          <Route path="/plans/rehab/:id" element={<RehabPlanPage />} />
+          <Route path="/plans/diet/:id" element={<MealPlanPage />} />
+          <Route path="/profile" element={<ProfilePage />} />
         </Route>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
