@@ -271,7 +271,7 @@ export default function DashboardPage() {
                 <p className="text-body-md text-text-body text-center max-w-sm">
                   Start a new meal, workout, or rehab plan tailored just for you.
                 </p>
-                <Link to="/plans/new" id="create-plan-cta">
+                <Link to="/plans/create" id="create-plan-cta">
                   <Button size="sm" className="mt-1">+ New Plan</Button>
                 </Link>
               </div>
