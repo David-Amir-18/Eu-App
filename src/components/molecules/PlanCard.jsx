@@ -75,25 +75,47 @@ export function PlanCard({
   sessionsMax,
   ctaLabel = 'Log a meal',
   image,
+  status,
+  // Preserved raw fields
+  rawType,
+  rawLevel,
+  rawStartDate,
+  rawEndDate,
+  rawEquipment,
+  rawWorkoutDays,
+  rawDietPref,
+  rawCalorieTarget,
+  rawMealSlots,
+  rawInjury,
+  rawRehabDays,
+  onDelete,
 }) {
   const navigate = useNavigate()
   const planType = defaultTab
   const cfg = TYPE_CONFIG[planType] || TYPE_CONFIG.Diet
   const bgImage = image || cfg.image
   const closestLabel = planType === 'Diet' ? 'Closest\nMeal' : 'Closest\nWorkout'
+  const isDraft = status === 'draft'
+  const isCustomPlan = id !== 'diabetes-friendly' && id !== 'full-body' && id !== 'acl-injury'
 
   return (
-    <div className="flex border border-border-primary rounded-xl overflow-hidden bg-surface-primary hover:shadow-md transition-shadow">
+    <div className={cn(
+      "flex border border-border-primary rounded-xl overflow-hidden bg-surface-primary hover:shadow-md transition-all duration-300",
+      isDraft && "bg-neutral-100/60 border-dashed"
+    )}>
 
       {/* Left panel — fixed width, image background */}
       <div
-        className="relative shrink-0 w-32 flex items-end justify-start p-3 overflow-hidden"
+        className={cn(
+          "relative shrink-0 w-32 flex items-end justify-start p-3 overflow-hidden transition-opacity duration-300",
+          isDraft && "opacity-50 saturate-50"
+        )}
         style={{
           backgroundImage: `linear-gradient(to top, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.1) 60%, transparent 100%), url(${bgImage})`,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
-        }}
-      >
+         }}
+       >
         {/* Type badge top-right */}
         <span className={cn('absolute top-2 right-2 text-body-sm font-bold px-2 py-0.5 rounded-round', cfg.badge)}>
           {planType}
@@ -125,12 +147,73 @@ export function PlanCard({
 
         {/* CTAs */}
         <div className="flex gap-2 mt-1">
-          <Button variant={cfg.btnOutline} size="sm" onClick={() => {
-            const type = planType.toLowerCase()
-            const planId = id || name.replace(/\s+/g, '-').toLowerCase()
-            navigate(`/plans/${type}/${planId}`)
-          }}>View Plan</Button>
-          <Button variant={cfg.btnPrimary} size="sm">{ctaLabel}</Button>
+          {isDraft ? (
+            <Button
+              variant={cfg.btnPrimary}
+              size="sm"
+              onClick={() => {
+                navigate('/plans/create', {
+                  state: {
+                    draftPlan: {
+                      id,
+                      name,
+                      defaultTab,
+                      dateRange,
+                      detail,
+                      progress,
+                      progressMax,
+                      sessions,
+                      sessionsMax,
+                      ctaLabel,
+                      image,
+                      status,
+                      rawType,
+                      rawLevel,
+                      rawStartDate,
+                      rawEndDate,
+                      rawEquipment,
+                      rawWorkoutDays,
+                      rawDietPref,
+                      rawCalorieTarget,
+                      rawMealSlots,
+                      rawInjury,
+                      rawRehabDays,
+                    }
+                  }
+                })
+              }}
+            >
+              Continue Editing Plan
+            </Button>
+          ) : (
+            <>
+              <Button variant={cfg.btnOutline} size="sm" onClick={() => {
+                const type = planType.toLowerCase()
+                const planId = id || name.replace(/\s+/g, '-').toLowerCase()
+                navigate(`/plans/${type}/${planId}`)
+              }}>View Plan</Button>
+              <Button variant={cfg.btnPrimary} size="sm">{ctaLabel}</Button>
+            </>
+          )}
+
+          {/* Sleek Trash Delete button for custom user plans */}
+          {isCustomPlan && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                onDelete?.(id)
+              }}
+              className="p-2 text-text-disabled hover:text-error-500 rounded-xl bg-neutral-100 hover:bg-error-100/30 border border-border-primary transition-all shadow-sm shrink-0 ml-auto"
+              title="Delete Plan"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+                <line x1="10" y1="11" x2="10" y2="17" />
+                <line x1="14" y1="11" x2="14" y2="17" />
+              </svg>
+            </button>
+          )}
         </div>
       </div>
 

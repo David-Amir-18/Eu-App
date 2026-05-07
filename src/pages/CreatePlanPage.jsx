@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { cn } from '../components/utils.js'
 import { Button } from '../components/atoms/Button.jsx'
 import { Field } from '../components/atoms/Field.jsx'
@@ -92,26 +92,28 @@ function formatDateShort(date) {
 // ── Main Page ──────────────────────────────────────────────────────────────────
 export default function CreatePlanPage() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const draftData = location.state?.draftPlan
 
   // General State
-  const [type, setType] = useState('workout') // 'workout', 'diet', 'rehab'
-  const [name, setName] = useState('')
-  const [startDate, setStartDate] = useState(null)
-  const [endDate, setEndDate] = useState(null)
-  const [level, setLevel] = useState('Beginner')
+  const [type, setType] = useState(draftData?.rawType || 'workout')
+  const [name, setName] = useState(draftData?.name || '')
+  const [startDate, setStartDate] = useState(draftData?.rawStartDate ? new Date(draftData.rawStartDate) : null)
+  const [endDate, setEndDate] = useState(draftData?.rawEndDate ? new Date(draftData.rawEndDate) : null)
+  const [level, setLevel] = useState(draftData?.rawLevel || (draftData?.rawType === 'diet' ? 'General Health' : draftData?.rawType === 'rehab' ? 'Phase 1 (Pain Management)' : 'Beginner'))
 
   // Workout State
-  const [equipment, setEquipment] = useState('Basic Equipment')
-  const [workoutDays, setWorkoutDays] = useState(['Mon', 'Wed', 'Fri'])
+  const [equipment, setEquipment] = useState(draftData?.rawEquipment || 'Basic Equipment')
+  const [workoutDays, setWorkoutDays] = useState(draftData?.rawWorkoutDays || ['Mon', 'Wed', 'Fri'])
 
   // Diet State
-  const [dietPref, setDietPref] = useState('None')
-  const [calorieTarget, setCalorieTarget] = useState('2000')
-  const [mealSlots, setMealSlots] = useState(['Breakfast', 'Lunch', 'Dinner'])
+  const [dietPref, setDietPref] = useState(draftData?.rawDietPref || 'None')
+  const [calorieTarget, setCalorieTarget] = useState(draftData?.rawCalorieTarget || '2000')
+  const [mealSlots, setMealSlots] = useState(draftData?.rawMealSlots || ['Breakfast', 'Lunch', 'Dinner'])
 
   // Rehab State
-  const [injury, setInjury] = useState('')
-  const [rehabDays, setRehabDays] = useState(['Mon', 'Tue', 'Thu', 'Fri'])
+  const [injury, setInjury] = useState(draftData?.rawInjury || '')
+  const [rehabDays, setRehabDays] = useState(draftData?.rawRehabDays || ['Mon', 'Tue', 'Thu', 'Fri'])
 
   // UI State
   const [showCancelModal, setShowCancelModal] = useState(false)
@@ -189,8 +191,8 @@ export default function CreatePlanPage() {
       return
     }
 
-    // Generate an ID
-    const planId = name.toLowerCase().replace(/\s+/g, '-') + '-' + Date.now()
+    // Generate or preserve ID
+    const planId = draftData?.id || (name.toLowerCase().replace(/\s+/g, '-') + '-' + Date.now())
 
     // Construct the payload
     const newPlan = {
@@ -208,11 +210,27 @@ export default function CreatePlanPage() {
       sessions: 0,
       sessionsMax: type === 'diet' ? durationWeeks * 7 : durationWeeks * activeDays.length,
       ctaLabel: type === 'diet' ? 'Log a meal' : type === 'rehab' ? 'View Protocol' : 'Log a workout',
+      // Raw preservation:
+      rawType: type,
+      rawLevel: level,
+      rawStartDate: startDate ? startDate.toISOString() : null,
+      rawEndDate: endDate ? endDate.toISOString() : null,
+      rawEquipment: equipment,
+      rawWorkoutDays: workoutDays,
+      rawDietPref: dietPref,
+      rawCalorieTarget: calorieTarget,
+      rawMealSlots: mealSlots,
+      rawInjury: injury,
+      rawRehabDays: rehabDays,
     }
 
     // Save to localStorage
     const existing = localStorage.getItem('user_plans')
-    const plans = existing ? JSON.parse(existing) : []
+    let plans = existing ? JSON.parse(existing) : []
+    // If updating an existing draft, remove the old instance
+    if (draftData?.id) {
+      plans = plans.filter(p => p.id !== draftData.id)
+    }
     plans.push(newPlan)
     localStorage.setItem('user_plans', JSON.stringify(plans))
 

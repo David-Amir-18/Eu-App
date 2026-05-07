@@ -50,7 +50,7 @@ const ALL_PLANS = [
   }
 ]
 
-const TABS = ['All', 'Active', 'Planned', 'Completed', 'Drafts']
+const TABS = ['All', 'Active', 'Completed', 'Drafts']
 
 export default function PlansPage() {
   const [activeTab, setActiveTab] = useState('All')
@@ -65,6 +65,27 @@ export default function PlansPage() {
       return ALL_PLANS
     }
   })
+
+  const [planToDelete, setPlanToDelete] = useState(null)
+
+  const handleDeletePlan = (id) => {
+    setPlanToDelete(id)
+  }
+
+  const confirmDeletePlan = () => {
+    if (!planToDelete) return
+    try {
+      const stored = localStorage.getItem('user_plans')
+      const parsed = stored ? JSON.parse(stored) : []
+      const updated = parsed.filter(plan => plan.id !== planToDelete)
+      localStorage.setItem('user_plans', JSON.stringify(updated))
+      setPlans([...updated, ...ALL_PLANS])
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setPlanToDelete(null)
+    }
+  }
 
   const filteredPlans = plans.filter(plan => {
     if (activeTab === 'All') return plan.status !== 'draft'
@@ -113,7 +134,7 @@ export default function PlansPage() {
           <div className="flex flex-col gap-5">
             {filteredPlans.length > 0 ? (
               filteredPlans.map(plan => (
-                <PlanCard key={plan.id} {...plan} />
+                <PlanCard key={plan.id} {...plan} onDelete={handleDeletePlan} />
               ))
             ) : (
               <div className="py-12 flex flex-col items-center justify-center text-center border border-border-primary border-dashed rounded-xl bg-surface-primary opacity-70">
@@ -136,6 +157,46 @@ export default function PlansPage() {
         </section>
 
       </div>
+
+      {/* Custom In-App Confirmation Modal */}
+      {planToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-neutral-black/50 backdrop-blur-xs animate-fade-in" onClick={() => setPlanToDelete(null)} />
+          <div className="relative bg-surface-primary rounded-3xl shadow-2xl border border-border-primary w-full max-w-md overflow-hidden p-6 flex flex-col gap-5 animate-scale-up z-10 animate-fade-in">
+            <div className="flex items-start gap-4">
+              <div className="p-3 bg-error-50 text-error-500 rounded-2xl shrink-0">
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                  <line x1="12" y1="9" x2="12" y2="13" />
+                  <line x1="12" y1="17" x2="12.01" y2="17" />
+                </svg>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <h3 className="text-heading-h6 font-bold text-text-headings">Delete Custom Plan?</h3>
+                <p className="text-body-md text-text-disabled leading-relaxed">
+                  Are you absolutely sure you want to delete this plan? This action is permanent and cannot be undone.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end mt-2">
+              <Button
+                variant="neutral"
+                onClick={() => setPlanToDelete(null)}
+                className="flex-1 sm:flex-none border border-border-primary bg-surface-primary hover:bg-neutral-100 font-bold px-5 text-text-body"
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                onClick={confirmDeletePlan}
+                className="flex-1 sm:flex-none bg-error-500 hover:bg-error-600 text-neutral-white font-bold px-6 shadow-md"
+              >
+                Yes, Delete Plan
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
