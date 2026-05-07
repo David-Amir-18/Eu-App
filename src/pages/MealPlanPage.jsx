@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { cn } from '../components/utils.js'
 import { Button } from '../components/atoms/Button.jsx'
 
@@ -405,12 +405,63 @@ function MealSlotCard({ slot, onToggleTaken, onSelectMeal, onRandomMeal, onEditC
   )
 }
 
-// ── Main page ──────────────────────────────────────────────────────────────────
 export default function MealPlanPage() {
   const navigate = useNavigate()
-  const [slots, setSlots] = useState(MOCK_SLOTS)
+  const { id } = useParams()
+
+  const [plan] = useState(() => {
+    try {
+      const stored = localStorage.getItem('user_plans')
+      const plans = stored ? JSON.parse(stored) : []
+      const found = plans.find(p => p.id === id)
+      if (found) {
+        if (!found.calorieTarget && found.detail) {
+          const kcalMatch = found.detail.match(/(\d+)\s*kcal/i)
+          found.calorieTarget = kcalMatch ? parseInt(kcalMatch[1]) : 2000
+        }
+        return found
+      }
+    } catch (e) {
+      console.error(e)
+    }
+    return MOCK_PLAN
+  })
+
+  const [slots, setSlots] = useState(() => {
+    if (plan.slots) return plan.slots
+    if (plan.mealSlots) {
+      return plan.mealSlots.map(label => ({
+        id: label.toLowerCase(),
+        label: label,
+        time: label === 'Breakfast' ? '7:00 AM' : label === 'Lunch' ? '12:30 PM' : '7:00 PM',
+        meals: [],
+        selectedMealId: null,
+        taken: false
+      }))
+    }
+    return MOCK_SLOTS
+  })
+
   const [showEditStructure, setShowEditStructure] = useState(false)
   const [editCollectionSlot, setEditCollectionSlot] = useState(null)
+
+  // Sync slots to localStorage for custom plans
+  useEffect(() => {
+    if (plan.id === 'diabetes-friendly') return
+    try {
+      const stored = localStorage.getItem('user_plans')
+      const plans = stored ? JSON.parse(stored) : []
+      const updated = plans.map(p => {
+        if (p.id === plan.id) {
+          return { ...p, slots }
+        }
+        return p
+      })
+      localStorage.setItem('user_plans', JSON.stringify(updated))
+    } catch (e) {
+      console.error(e)
+    }
+  }, [slots, plan.id])
 
   const totalCalories = slots.reduce((sum, slot) => {
     const meal = slot.meals.find(m => m.id === slot.selectedMealId) || slot.meals[0]
@@ -457,7 +508,7 @@ export default function MealPlanPage() {
     ))
   }
 
-  const caloriePct = Math.min(100, Math.round((totalCalories / MOCK_PLAN.calorieTarget) * 100))
+  const caloriePct = Math.min(100, Math.round((totalCalories / plan.calorieTarget) * 100))
   const takenCount = slots.filter(s => s.taken).length
 
   return (
@@ -465,22 +516,22 @@ export default function MealPlanPage() {
 
       {/* ── Banner ── */}
       <div className="relative h-56 overflow-hidden">
-        <img src={MOCK_PLAN.image} alt={MOCK_PLAN.name} className="w-full h-full object-cover" />
+        <img src={plan.image || MOCK_PLAN.image} alt={plan.name} className="w-full h-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-t from-neutral-black via-neutral-black/40 to-transparent" />
         <div className="absolute inset-0 flex flex-col justify-between p-6">
-          <button onClick={() => navigate('/dashboard')}
+          <button onClick={() => navigate(-1)}
             className="flex items-center gap-1 text-body-sm text-neutral-white font-semibold self-start hover:opacity-80 transition-opacity">
             <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-            Dashboard
+            Back
           </button>
           <div className="flex items-end justify-between">
             <div>
               <div className="flex items-center gap-2 mb-1">
                 <span className="bg-meals-prim-100 text-meals-prim text-body-sm font-bold px-2 py-0.5 rounded-round">Diet</span>
-                <span className="bg-error-100 text-error-500 text-body-sm font-bold px-2 py-0.5 rounded-round">{MOCK_PLAN.condition}</span>
+                <span className="bg-error-100 text-error-500 text-body-sm font-bold px-2 py-0.5 rounded-round">{plan.level || plan.condition || 'General Health'}</span>
               </div>
-              <h1 className="text-heading-h4 font-bold text-neutral-white">{MOCK_PLAN.name}</h1>
-              <p className="text-body-sm text-neutral-200">{MOCK_PLAN.startDate} → {MOCK_PLAN.endDate}</p>
+              <h1 className="text-heading-h4 font-bold text-neutral-white">{plan.name}</h1>
+              <p className="text-body-sm text-neutral-200">{plan.dateRange || `${plan.startDate} → ${plan.endDate}`}</p>
             </div>
             <Button variant="meals-outline" size="sm" className="border-neutral-white text-neutral-white hover:bg-neutral-white/10" onClick={() => setShowEditStructure(true)}>Edit</Button>
           </div>
@@ -492,7 +543,7 @@ export default function MealPlanPage() {
         <div className="flex flex-col gap-1 flex-1 min-w-[200px]">
           <div className="flex items-center justify-between">
             <span className="text-body-sm text-text-disabled font-semibold">Today's Calories</span>
-            <span className="text-body-sm font-bold text-text-headings">{totalCalories} / {MOCK_PLAN.calorieTarget} kcal</span>
+            <span className="text-body-sm font-bold text-text-headings">{totalCalories} / {plan.calorieTarget} kcal</span>
           </div>
           <div className="w-full h-2 bg-neutral-100 rounded-round overflow-hidden">
             <div className="h-full bg-meals-prim rounded-round transition-all duration-500" style={{ width: `${caloriePct}%` }} />

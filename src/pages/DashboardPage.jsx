@@ -1,6 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { MealTabBar } from '../components/organisms/MealTabBar.jsx'
 import { PlanCard } from '../components/molecules/PlanCard.jsx'
 import { Button } from '../components/atoms/Button.jsx'
 import { cn } from '../components/utils.js'
@@ -218,7 +217,7 @@ function HealthStatsBar({ profile, loading }) {
   if (loading) {
     return (
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {[1,2,3,4].map(i => (
+        {[1, 2, 3, 4].map(i => (
           <div key={i} className="bg-neutral-100 rounded-xl p-4 animate-pulse h-20" />
         ))}
       </div>
@@ -255,7 +254,6 @@ function HealthStatsBar({ profile, loading }) {
 
 // ── Main page ──────────────────────────────────────────────────────────────────
 export default function DashboardPage() {
-  const [mealTab, setMealTab] = useState('today')
   const today = useMemo(() => new Date(), [])
   const [profile, setProfile] = useState(null)
   const [profileLoading, setProfileLoading] = useState(true)
@@ -279,11 +277,8 @@ export default function DashboardPage() {
 
   return (
     <div className="flex flex-col min-h-screen">
-      {/* Meal tab bar */}
-      <MealTabBar activeTab={mealTab} onTabChange={setMealTab} />
-
       {/* Scrollable content */}
-      <div className="flex-1 overflow-auto px-8 py-8 flex flex-col gap-10">
+      <div className="flex-1 overflow-auto px-8 py-8 flex flex-col gap-10 animate-fade-in">
 
         {/* Greeting */}
         <h1 className="text-heading-h4 font-bold text-text-headings leading-tight">
@@ -312,7 +307,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Create new plan CTA */}
-          <div className="border border-border-primary border-dashed rounded-lg px-8 py-10 flex flex-col items-center gap-3 bg-neutral-100 hover:bg-surface-action-hover2 transition-colors">
+          {/* <div className="border border-border-primary border-dashed rounded-lg px-8 py-10 flex flex-col items-center gap-3 bg-neutral-100 hover:bg-surface-action-hover2 transition-colors">
             <h3 className="text-heading-h6 font-bold text-text-headings">Create a New Plan</h3>
             <p className="text-body-md text-text-body text-center max-w-sm">
               Start a new meal, workout, or rehab plan tailored just for you.
@@ -320,7 +315,7 @@ export default function DashboardPage() {
             <Link to="/plans/new" id="create-plan-cta">
               <Button size="sm" className="mt-1">+ New Plan</Button>
             </Link>
-          </div>
+          </div> */}
         </section>
       </div>
     </div>
