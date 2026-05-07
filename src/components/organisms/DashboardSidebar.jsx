@@ -46,6 +46,33 @@ function IconLogout() {
     </svg>
   )
 }
+function IconPlans() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 6h16M4 12h16M4 18h7" />
+    </svg>
+  )
+}
+function IconNotifications() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+    </svg>
+  )
+}
+function IconHelp() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="10" />
+      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+      <line x1="12" y1="17" x2="12.01" y2="17" />
+    </svg>
+  )
+}
 function IconFire() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -92,8 +119,11 @@ function StatRow({ label, value, max }) {
 const navItems = [
   { to: '/dashboard', label: 'Meals',     icon: <IconMeals />,    end: true },
   { to: '/workouts',  label: 'Workouts',  icon: <IconWorkouts />, end: false },
-  { to: '/profile',   label: 'Profile',   icon: <IconProfile />,  end: false },
+  { to: '/plans',     label: 'Plans',     icon: <IconPlans />,    end: false },
+  { to: '/profile',   label: 'Account',   icon: <IconProfile />,  end: false },
+  { to: '/notifications', label: 'Notifications', icon: <IconNotifications />, end: false },
   { to: '/settings',  label: 'Settings',  icon: <IconSettings />, end: false },
+  { to: '/help',      label: 'Help',      icon: <IconHelp />,     end: false },
 ]
 
 // ── Component ──────────────────────────────────────────────────────────────────
