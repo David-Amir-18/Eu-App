@@ -6,8 +6,8 @@ import { Field } from '../components/atoms/Field.jsx'
 import { DatePicker } from '../components/molecules/DatePicker.jsx'
 import { DefinedField } from '../components/molecules/DefinedField.jsx'
 import { getExercises } from '../api/exercisesService.js'
-import { createWorkoutPlan, createRoutine, addExerciseToRoutine } from '../api/workoutsService.js'
-import { getMeals, createMealPlan, addMealSlot } from '../api/mealPlansService.js'
+import { createWorkoutPlan, createRoutine, addExerciseToRoutine as apiAddExerciseToRoutine } from '../api/workoutsService.js'
+import { getMeals, getMealFilterOptions, createMealPlan, addMealSlot } from '../api/mealPlansService.js'
 
 // ── Icons ──────────────────────────────────────────────────────────────────────
 function IconWorkout() {
@@ -175,6 +175,32 @@ export default function CreatePlanPage() {
   const [modalMuscleGroup, setModalMuscleGroup] = useState('all')
   const [modalExerciseType, setModalExerciseType] = useState('all')
 
+  // Diet / Meal State
+  const [dietPref, setDietPref] = useState(draftData?.rawDietPref || 'weight_loss')
+  const [calorieTarget, setCalorieTarget] = useState(draftData?.rawCalorieTarget || '2000')
+  // selectedMealSlots: { breakfast: MealListItem|null, lunch: ..., dinner: ..., snack: ... }
+  const [selectedMealSlots, setSelectedMealSlots] = useState({ breakfast: null, lunch: null, dinner: null, snack: null })
+  // Meal search modal state
+  const [showMealSearchModal, setShowMealSearchModal] = useState(false)
+  const [mealSearchSlot, setMealSearchSlot] = useState(null)   // which slot type is being filled
+  const [mealSearchQuery, setMealSearchQuery] = useState('')
+  const [mealSearchTag, setMealSearchTag] = useState('')
+  const [mealSearchMaxCal, setMealSearchMaxCal] = useState('')
+  const [mealSearchResults, setMealSearchResults] = useState([])
+  const [mealSearchLoading, setMealSearchLoading] = useState(false)
+  const [mealSearchPage, setMealSearchPage] = useState(1)
+  const [mealSearchTotal, setMealSearchTotal] = useState(0)
+  const [mealUseProfile, setMealUseProfile] = useState(false)
+  const [mealAvailableTags, setMealAvailableTags] = useState([])
+  const MEAL_PAGE_SIZE = 20
+
+  // Fetch available meal tags once on mount
+  useEffect(() => {
+    getMealFilterOptions()
+      .then(data => setMealAvailableTags(data.tags || []))
+      .catch(() => {})
+  }, [])
+
   useEffect(() => {
     if (!showExerciseSearchModal || !activeRoutineId) return
     setExerciseSearchLoading(true)
@@ -203,12 +229,13 @@ export default function CreatePlanPage() {
       search: mealSearchQuery || undefined,
       tag:    mealSearchTag   || undefined,
       maxCalories: mealSearchMaxCal ? parseInt(mealSearchMaxCal) : undefined,
+      useProfile: mealUseProfile,
     })
       .then(data => { setMealSearchResults(data.results || []); setMealSearchTotal(data.total || 0) })
       .catch(() => setMealSearchResults([]))
       .finally(() => setMealSearchLoading(false))
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showMealSearchModal, mealSearchQuery, mealSearchTag, mealSearchMaxCal, mealSearchPage])
+  }, [showMealSearchModal, mealSearchQuery, mealSearchTag, mealSearchMaxCal, mealSearchPage, mealUseProfile])
 
   function openMealSearch(slotType) {
     setMealSearchSlot(slotType)
@@ -217,6 +244,7 @@ export default function CreatePlanPage() {
     setMealSearchMaxCal('')
     setMealSearchPage(1)
     setMealSearchResults([])
+    setMealUseProfile(false)
     setShowMealSearchModal(true)
   }
 
@@ -225,22 +253,6 @@ export default function CreatePlanPage() {
     setShowMealSearchModal(false)
   }
 
-  // Diet / Meal State
-  const [dietPref, setDietPref] = useState(draftData?.rawDietPref || 'weight_loss')
-  const [calorieTarget, setCalorieTarget] = useState(draftData?.rawCalorieTarget || '2000')
-  // selectedMealSlots: { breakfast: MealListItem|null, lunch: ..., dinner: ..., snack: ... }
-  const [selectedMealSlots, setSelectedMealSlots] = useState({ breakfast: null, lunch: null, dinner: null, snack: null })
-  // Meal search modal state
-  const [showMealSearchModal, setShowMealSearchModal] = useState(false)
-  const [mealSearchSlot, setMealSearchSlot] = useState(null)   // which slot type is being filled
-  const [mealSearchQuery, setMealSearchQuery] = useState('')
-  const [mealSearchTag, setMealSearchTag] = useState('')
-  const [mealSearchMaxCal, setMealSearchMaxCal] = useState('')
-  const [mealSearchResults, setMealSearchResults] = useState([])
-  const [mealSearchLoading, setMealSearchLoading] = useState(false)
-  const [mealSearchPage, setMealSearchPage] = useState(1)
-  const [mealSearchTotal, setMealSearchTotal] = useState(0)
-  const MEAL_PAGE_SIZE = 20
 
   // Rehab State
   const [injury, setInjury] = useState(draftData?.rawInjury || '')
@@ -344,7 +356,7 @@ export default function CreatePlanPage() {
     setShowExerciseConfigModal(true)
   }
 
-  const addExerciseToRoutine = () => {
+  const addExerciseToActiveRoutine = () => {
     if (!pendingExercise || !activeRoutineId) return
     setRoutines(prev => prev.map(r => {
       if (r.id !== activeRoutineId) return r
@@ -525,7 +537,7 @@ export default function CreatePlanPage() {
             })
             // Step 3: Add exercises to the created routine
             for (const [pos, ex] of (routine.exercises || []).entries()) {
-              await addExerciseToRoutine(createdRoutine.id, {
+              await apiAddExerciseToRoutine(createdRoutine.id, {
                 exercise_id: ex.exercise_id,
                 position: pos,
                 sets: ex.sets ?? null,
@@ -810,41 +822,109 @@ export default function CreatePlanPage() {
                     </div>
                   </div>
 
-                  {/* Meal slot pickers */}
-                  <div className="flex flex-col gap-3">
+                  {/* Meal slot pickers — premium redesign */}
+                  <div className="flex flex-col gap-4">
                     <div className="flex items-center justify-between border-b border-border-primary pb-3">
                       <div>
                         <label className="text-body-sm font-bold text-text-headings">Daily Meal Slots</label>
-                        <p className="text-body-sm text-text-disabled mt-0.5">Pick one meal per slot from the library. All slots are optional.</p>
+                        <p className="text-body-sm text-text-disabled mt-0.5">
+                          Assign one meal per slot from the library. All slots are optional.
+                        </p>
                       </div>
+                      <span className="text-body-xs font-bold px-2.5 py-1 rounded-full bg-meals-prim/10 text-meals-prim">
+                        {Object.values(selectedMealSlots).filter(Boolean).length} / {MEAL_SLOT_TYPES.length} filled
+                      </span>
                     </div>
+
                     {MEAL_SLOT_TYPES.map(slotType => {
                       const meal = selectedMealSlots[slotType]
+                      const SLOT_ICONS = {
+                        breakfast: '-', lunch: '-', dinner: '-', snack: '-'
+                      }
                       return (
-                        <div key={slotType} className="flex items-center gap-4 p-4 rounded-xl border border-border-primary bg-surface-primary transition-all hover:border-meals-prim">
-                          <span className="w-24 shrink-0 text-body-sm font-bold text-meals-prim capitalize">{MEAL_SLOT_LABELS[slotType]}</span>
-                          <div className="flex-1 border-l border-border-primary pl-4">
+                        <div
+                          key={slotType}
+                          className={`rounded-2xl border transition-all duration-200 overflow-hidden ${meal ? 'border-meals-prim/40 bg-meals-prim/5' : 'border-border-primary bg-surface-primary hover:border-meals-prim/50'}`}
+                        >
+                          {/* Slot header */}
+                          <div className="flex items-center gap-3 px-4 pt-3 pb-2">
+                            <span className="text-lg">{SLOT_ICONS[slotType]}</span>
+                            <span className="text-body-sm font-bold text-text-headings capitalize">{MEAL_SLOT_LABELS[slotType]}</span>
+                            {meal && (
+                              <span className="ml-auto text-body-xs font-semibold text-meals-prim bg-meals-prim/10 px-2 py-0.5 rounded-full">Assigned</span>
+                            )}
+                          </div>
+
+                          {/* Slot body */}
+                          <div className="px-4 pb-4">
                             {meal ? (
-                              <div className="flex items-center gap-3">
-                                {meal.image_url && (
-                                  <img src={meal.image_url} alt={meal.title} className="w-10 h-10 rounded-lg object-cover shrink-0" />
+                              <div className="flex items-center gap-3 p-3 rounded-xl bg-surface-primary border border-border-primary shadow-sm">
+                                {meal.image_url ? (
+                                  <img src={meal.image_url} alt={meal.title} className="w-14 h-14 rounded-xl object-cover shrink-0 shadow-sm" />
+                                ) : (
+                                  <div className="w-14 h-14 rounded-xl bg-neutral-100 flex items-center justify-center shrink-0 text-2xl">
+                                    {SLOT_ICONS[slotType]}
+                                  </div>
                                 )}
                                 <div className="flex-1 min-w-0">
-                                  <p className="text-body-sm font-bold text-text-headings truncate">{meal.title}</p>
-                                  <p className="text-body-sm text-text-disabled">
-                                    {meal.nutrition?.calories_cal ? `${meal.nutrition.calories_cal} kcal` : ''}
-                                    {meal.nutrition?.protein_g ? ` · ${meal.nutrition.protein_g}g protein` : ''}
-                                  </p>
+                                  <p className="text-body-sm font-bold text-text-headings truncate mb-1.5">{meal.title}</p>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {meal.nutrition?.calories_cal && (
+                                      <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                                        {meal.nutrition.calories_cal} kcal
+                                      </span>
+                                    )}
+                                    {meal.nutrition?.protein_g && (
+                                      <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                                        {meal.nutrition.protein_g}g protein
+                                      </span>
+                                    )}
+                                    {meal.nutrition?.carbohydrates_g && (
+                                      <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-200">
+                                        {meal.nutrition.carbohydrates_g}g carbs
+                                      </span>
+                                    )}
+                                    {meal.nutrition?.total_fat_g && (
+                                      <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
+                                        {meal.nutrition.total_fat_g}g fat
+                                      </span>
+                                    )}
+                                    {meal.tags?.length > 0 && meal.tags.slice(0, 2).map(tag => (
+                                      <span key={tag} className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-neutral-100 text-text-disabled border border-border-primary capitalize">
+                                        {tag}
+                                      </span>
+                                    ))}
+                                  </div>
                                 </div>
-                                <button type="button" onClick={() => setSelectedMealSlots(p => ({ ...p, [slotType]: null }))}
-                                  className="text-text-disabled hover:text-text-error transition-colors shrink-0 p-1">
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                                </button>
+                                <div className="flex flex-col gap-1.5 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => openMealSearch(slotType)}
+                                    className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-meals-prim/10 text-meals-prim hover:bg-meals-prim/20 transition-colors"
+                                  >
+                                    Change
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setSelectedMealSlots(p => ({ ...p, [slotType]: null }))}
+                                    className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-neutral-100 text-text-disabled hover:bg-error-50 hover:text-error-500 transition-colors"
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
                               </div>
                             ) : (
-                              <button type="button" onClick={() => openMealSearch(slotType)}
-                                className="text-body-sm font-semibold text-text-disabled border border-dashed border-border-primary rounded-lg px-4 py-2 w-full text-left hover:bg-neutral-100 hover:text-meals-prim hover:border-meals-prim transition-colors">
-                                + Choose a meal…
+                              <button
+                                type="button"
+                                onClick={() => openMealSearch(slotType)}
+                                className="w-full flex items-center gap-3 p-3 rounded-xl border-2 border-dashed border-border-primary bg-neutral-100/50 hover:border-meals-prim hover:bg-meals-prim/5 transition-all group"
+                              >
+                                <div className="w-10 h-10 rounded-xl bg-surface-primary border border-border-primary flex items-center justify-center group-hover:border-meals-prim transition-colors">
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-text-disabled group-hover:text-meals-prim transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                                </div>
+                                <span className="text-body-sm font-semibold text-text-disabled group-hover:text-meals-prim transition-colors">
+                                  Choose a meal from library…
+                                </span>
                               </button>
                             )}
                           </div>
@@ -1085,6 +1165,178 @@ export default function CreatePlanPage() {
         </div>
       </Modal>
 
+      {/* ── Meal Search Modal ── */}
+      {showMealSearchModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-neutral-black/50 backdrop-blur-xs" onClick={() => setShowMealSearchModal(false)} />
+          <div className="relative bg-surface-primary rounded-3xl shadow-2xl w-full max-w-lg flex flex-col max-h-[88vh] overflow-hidden border border-border-primary animate-scale-up">
+
+            {/* Header */}
+            <div className="px-6 py-5 border-b border-border-primary flex justify-between items-center bg-surface-primary rounded-t-3xl shrink-0">
+              <div>
+                <h3 className="text-heading-h6 font-bold text-text-headings">Choose a Meal</h3>
+                <p className="text-[11px] font-semibold text-text-disabled mt-0.5 capitalize">
+                  Slot: {mealSearchSlot || '—'}
+                </p>
+              </div>
+              <button type="button" onClick={() => setShowMealSearchModal(false)} className="text-text-disabled hover:text-text-headings transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+
+            {/* Search bar */}
+            <div className="p-4 border-b border-border-primary bg-surface-primary shrink-0">
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Search meals..."
+                  value={mealSearchQuery}
+                  onChange={e => { setMealSearchQuery(e.target.value); setMealSearchPage(1) }}
+                  className="w-full bg-surface-primary border border-border-primary rounded-xl pl-11 pr-4 py-2 text-body-md text-text-body focus:outline-none focus:border-meals-prim shadow-sm transition-all"
+                />
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-text-disabled absolute left-4 top-1/2 -translate-y-1/2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              </div>
+            </div>
+
+            {/* Filters */}
+            <div className="px-4 py-3 border-b border-border-primary bg-neutral-100 flex flex-col gap-2 shrink-0">
+              {/* "Recommend for me" toggle */}
+              <div className="flex items-center justify-between">
+                <span className="text-body-xs font-bold text-text-headings">Recommend for my profile</span>
+                <button
+                  type="button"
+                  onClick={() => { setMealUseProfile(p => !p); setMealSearchTag(''); setMealSearchPage(1) }}
+                  className={`relative w-10 h-5 rounded-full transition-colors ${mealUseProfile ? 'bg-meals-prim' : 'bg-border-primary'}`}
+                >
+                  <span className={`absolute top-0.5 w-4 h-4 bg-neutral-white rounded-full shadow transition-all ${mealUseProfile ? 'left-5' : 'left-0.5'}`} />
+                </button>
+              </div>
+
+              {/* Tag chips (hidden when useProfile is on) */}
+              {!mealUseProfile && mealAvailableTags.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 max-h-20 overflow-y-auto">
+                  <button
+                    type="button"
+                    onClick={() => { setMealSearchTag(''); setMealSearchPage(1) }}
+                    className={`px-2.5 py-0.5 rounded-full text-body-sm font-semibold border transition-all ${!mealSearchTag ? 'bg-meals-prim text-neutral-white border-transparent' : 'bg-surface-primary text-text-disabled border-border-primary hover:border-meals-prim hover:text-meals-prim'}`}
+                  >
+                    All
+                  </button>
+                  {mealAvailableTags.map(tag => (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => { setMealSearchTag(mealSearchTag === tag ? '' : tag); setMealSearchPage(1) }}
+                      className={`px-2.5 py-0.5 rounded-full text-body-sm font-semibold border transition-all capitalize ${mealSearchTag === tag ? 'bg-meals-prim text-neutral-white border-transparent' : 'bg-surface-primary text-text-disabled border-border-primary hover:border-meals-prim hover:text-meals-prim'}`}
+                    >
+                      {tag}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Calorie filter */}
+              <div className="flex items-center gap-2">
+                <label className="text-body-xs font-semibold text-text-disabled shrink-0">Max kcal</label>
+                <input
+                  type="number"
+                  placeholder="e.g. 500"
+                  value={mealSearchMaxCal}
+                  onChange={e => { setMealSearchMaxCal(e.target.value); setMealSearchPage(1) }}
+                  className="flex-1 bg-surface-primary border border-border-primary rounded-lg px-3 py-1 text-body-sm text-text-body focus:outline-none focus:border-meals-prim transition-all"
+                />
+                {mealSearchMaxCal && (
+                  <button type="button" onClick={() => setMealSearchMaxCal('')} className="text-text-disabled hover:text-text-error transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Results */}
+            <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2">
+              {mealSearchLoading ? (
+                <div className="py-12 flex flex-col items-center justify-center text-center">
+                  <div className="w-8 h-8 rounded-full border-4 border-meals-prim border-t-transparent animate-spin mb-3" />
+                  <p className="text-body-sm font-semibold text-text-disabled">Loading meals…</p>
+                </div>
+              ) : mealSearchResults.length > 0 ? (
+                mealSearchResults.map(meal => {
+                  const isSelected = selectedMealSlots[mealSearchSlot]?.id === meal.id
+                  return (
+                    <div
+                      key={meal.id}
+                      onClick={() => selectMeal(meal)}
+                      className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer select-none ${isSelected ? 'border-meals-prim bg-meals-prim/5' : 'border-border-primary bg-surface-primary hover:border-meals-prim/50 hover:bg-meals-prim/5'}`}
+                    >
+                      {meal.image_url ? (
+                        <img src={meal.image_url} alt={meal.title} className="w-12 h-12 rounded-xl object-cover shrink-0 shadow-sm" />
+                      ) : (
+                        <div className="w-12 h-12 rounded-xl bg-neutral-100 flex items-center justify-center shrink-0 text-xl">🍽️</div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-body-sm font-bold text-text-headings truncate mb-1">{meal.title}</p>
+                        <div className="flex flex-wrap gap-1">
+                          {meal.nutrition?.calories_cal && (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-700">{meal.nutrition.calories_cal} kcal</span>
+                          )}
+                          {meal.nutrition?.protein_g && (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-700">{meal.nutrition.protein_g}g P</span>
+                          )}
+                          {meal.nutrition?.carbohydrates_g && (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-green-50 text-green-700">{meal.nutrition.carbohydrates_g}g C</span>
+                          )}
+                          {meal.nutrition?.total_fat_g && (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-rose-50 text-rose-700">{meal.nutrition.total_fat_g}g F</span>
+                          )}
+                          {meal.tags?.slice(0, 2).map(tag => (
+                            <span key={tag} className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-neutral-100 text-text-disabled capitalize">{tag}</span>
+                          ))}
+                        </div>
+                      </div>
+                      <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all shrink-0 ${isSelected ? 'border-meals-prim bg-meals-prim text-neutral-white' : 'border-border-primary'}`}>
+                        {isSelected && <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 stroke-current" viewBox="0 0 24 24" fill="none" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                      </div>
+                    </div>
+                  )
+                })
+              ) : (
+                <div className="py-12 text-center">
+                  <p className="text-body-md font-semibold text-text-disabled">No meals found.</p>
+                  <p className="text-body-xs text-text-disabled mt-1">Try adjusting your filters or search term.</p>
+                </div>
+              )}
+            </div>
+
+            {/* Pagination + footer */}
+            <div className="border-t border-border-primary px-6 py-4 flex items-center justify-between bg-surface-primary shrink-0 rounded-b-3xl gap-3">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={mealSearchPage <= 1}
+                  onClick={() => setMealSearchPage(p => p - 1)}
+                  className="px-3 py-1.5 rounded-lg text-body-sm font-semibold border border-border-primary text-text-disabled hover:border-meals-prim hover:text-meals-prim disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  ← Prev
+                </button>
+                <span className="text-body-xs text-text-disabled font-medium">
+                  {mealSearchPage} / {Math.max(1, Math.ceil(mealSearchTotal / MEAL_PAGE_SIZE))}
+                </span>
+                <button
+                  type="button"
+                  disabled={mealSearchPage >= Math.ceil(mealSearchTotal / MEAL_PAGE_SIZE)}
+                  onClick={() => setMealSearchPage(p => p + 1)}
+                  className="px-3 py-1.5 rounded-lg text-body-sm font-semibold border border-border-primary text-text-disabled hover:border-meals-prim hover:text-meals-prim disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Next →
+                </button>
+              </div>
+              <span className="text-body-xs text-text-disabled">{mealSearchTotal} meals</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Exercise Search & Selection Modal */}
       {showExerciseSearchModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -1226,7 +1478,7 @@ export default function CreatePlanPage() {
       <Modal
         open={showExerciseConfigModal}
         onClose={() => setShowExerciseConfigModal(false)}
-        onConfirm={addExerciseToRoutine}
+        onConfirm={addExerciseToActiveRoutine}
         confirmText="Add Exercise"
         cancelText="Cancel"
         title={`Configure ${pendingExercise?.title || 'Exercise'}`}
