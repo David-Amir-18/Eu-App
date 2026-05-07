@@ -448,9 +448,9 @@ export default function WorkoutsPage() {
       {showAddToPlanModal && exerciseToAddToPlan && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-neutral-black/50 backdrop-blur-xs" onClick={() => setShowAddToPlanModal(false)} />
-          <div className="relative bg-surface-primary rounded-3xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col animate-scale-up border border-border-primary">
+          <div className="relative bg-surface-primary rounded-3xl shadow-2xl w-full max-w-md flex flex-col animate-scale-up border border-border-primary">
 
-            <div className="px-6 py-5 border-b border-border-primary flex items-center justify-between">
+            <div className="px-6 py-5 border-b border-border-primary flex items-center justify-between rounded-t-3xl">
               <h3 className="text-heading-h6 font-bold text-text-headings">Add to Plan</h3>
               <button
                 onClick={() => setShowAddToPlanModal(false)}
@@ -492,7 +492,7 @@ export default function WorkoutsPage() {
               )}
             </div>
 
-            <div className="border-t border-border-primary px-6 py-4 flex gap-3 bg-neutral-100 shrink-0">
+            <div className="border-t border-border-primary px-6 py-4 flex gap-3 bg-neutral-100 shrink-0 rounded-b-3xl">
               <Button
                 variant="neutral"
                 className="flex-1 font-bold border border-border-primary bg-surface-primary text-text-body"

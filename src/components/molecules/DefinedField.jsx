@@ -121,7 +121,7 @@ export function DefinedField({
           <ul
             role="listbox"
             aria-label={label}
-            className="absolute z-50 mt-1 w-full rounded-md border border-border-primary bg-surface-primary shadow-lg overflow-hidden"
+            className="absolute z-50 mt-1 w-full rounded-md border border-border-primary bg-surface-primary shadow-lg max-h-48 overflow-y-auto"
           >
             {options.map((option) => (
               <li

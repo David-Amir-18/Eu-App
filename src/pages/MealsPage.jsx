@@ -201,8 +201,7 @@ export default function MealsPage() {
       const dietPlans = parsed.filter(p => p.defaultTab === 'Diet')
       setUserPlans(dietPlans)
       if (dietPlans.length > 0) {
-        setTargetPlanId(dietPlans[0].id)
-        const slots = dietPlans[0].mealSlots || ['Breakfast', 'Lunch', 'Dinner']
+        const slots = dietPlans[0].mealSlots || dietPlans[0].rawMealSlots || ['Breakfast', 'Lunch', 'Dinner', 'Snacks']
         setTargetSlot(slots[0])
       }
     } catch (e) {
@@ -215,7 +214,7 @@ export default function MealsPage() {
     setTargetPlanId(planId)
     const selectedPlan = userPlans.find(p => p.id === planId)
     if (selectedPlan) {
-      const slots = selectedPlan.mealSlots || ['Breakfast', 'Lunch', 'Dinner']
+      const slots = selectedPlan.mealSlots || selectedPlan.rawMealSlots || ['Breakfast', 'Lunch', 'Dinner', 'Snacks']
       setTargetSlot(slots[0])
     }
   }
@@ -239,7 +238,7 @@ export default function MealsPage() {
         if (plan.id === targetPlanId) {
           // Initialize slots structure if it doesn't exist
           if (!plan.slots) {
-            const slotsToUse = plan.mealSlots || ['Breakfast', 'Lunch', 'Dinner']
+            const slotsToUse = plan.mealSlots || plan.rawMealSlots || ['Breakfast', 'Lunch', 'Dinner', 'Snacks']
             plan.slots = slotsToUse.map(label => ({
               id: label.toLowerCase(),
               label: label,
@@ -529,9 +528,9 @@ export default function MealsPage() {
       {showAddToPlanModal && mealToAddToPlan && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-neutral-black/50 backdrop-blur-xs" onClick={() => setShowAddToPlanModal(false)} />
-          <div className="relative bg-surface-primary rounded-3xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col animate-scale-up border border-border-primary">
+          <div className="relative bg-surface-primary rounded-3xl shadow-2xl w-full max-w-md flex flex-col animate-scale-up border border-border-primary">
 
-            <div className="px-6 py-5 border-b border-border-primary flex items-center justify-between">
+            <div className="px-6 py-5 border-b border-border-primary flex items-center justify-between rounded-t-3xl">
               <h3 className="text-heading-h6 font-bold text-text-headings">Add to Plan</h3>
               <button
                 onClick={() => setShowAddToPlanModal(false)}
@@ -562,7 +561,7 @@ export default function MealsPage() {
                     label="Meal Slot"
                     value={targetSlot}
                     onChange={setTargetSlot}
-                    options={(userPlans.find(p => p.id === targetPlanId)?.mealSlots || ['Breakfast', 'Lunch', 'Dinner']).map(slot => ({ value: slot, label: slot }))}
+                    options={(userPlans.find(p => p.id === targetPlanId)?.mealSlots || userPlans.find(p => p.id === targetPlanId)?.rawMealSlots || ['Breakfast', 'Lunch', 'Dinner', 'Snacks']).map(slot => ({ value: slot, label: slot }))}
                   />
                 </>
               ) : (
@@ -573,7 +572,7 @@ export default function MealsPage() {
               )}
             </div>
 
-            <div className="border-t border-border-primary px-6 py-4 flex gap-3 bg-neutral-100 shrink-0">
+            <div className="border-t border-border-primary px-6 py-4 flex gap-3 bg-neutral-100 shrink-0 rounded-b-3xl">
               <Button
                 variant="meals-outline"
                 className="flex-1 font-bold"

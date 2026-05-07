@@ -18,7 +18,7 @@ function IconRehab() {
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-const MEAL_SLOTS = ['Breakfast', 'Lunch', 'Dinner', 'Snack']
+const MEAL_SLOTS = ['Breakfast', 'Lunch', 'Dinner', 'Snacks']
 
 // ── Components ─────────────────────────────────────────────────────────────────
 function TypeCard({ type, active, onClick, icon, title, desc, activeClass }) {
@@ -109,7 +109,7 @@ export default function CreatePlanPage() {
   // Diet State
   const [dietPref, setDietPref] = useState(draftData?.rawDietPref || 'None')
   const [calorieTarget, setCalorieTarget] = useState(draftData?.rawCalorieTarget || '2000')
-  const [mealSlots, setMealSlots] = useState(draftData?.rawMealSlots || ['Breakfast', 'Lunch', 'Dinner'])
+  const [mealSlots, setMealSlots] = useState(draftData?.rawMealSlots || ['Breakfast', 'Lunch', 'Dinner', 'Snacks'])
 
   // Rehab State
   const [injury, setInjury] = useState(draftData?.rawInjury || '')
