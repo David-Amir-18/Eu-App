@@ -5,6 +5,7 @@ import { Button } from '../components/atoms/Button.jsx'
 import { Field } from '../components/atoms/Field.jsx'
 import { DatePicker } from '../components/molecules/DatePicker.jsx'
 import { DefinedField } from '../components/molecules/DefinedField.jsx'
+import { getExercises } from '../api/exercisesService.js'
 
 // ── Icons ──────────────────────────────────────────────────────────────────────
 function IconWorkout() {
@@ -142,7 +143,34 @@ export default function CreatePlanPage() {
   const [workoutDays, setWorkoutDays] = useState(draftData?.rawWorkoutDays || ['Mon', 'Wed', 'Fri'])
   const [exerciseType, setExerciseType] = useState(draftData?.rawExerciseType || 'weight_reps')
   const [muscleGroup, setMuscleGroup] = useState(draftData?.rawMuscleGroup || 'chest')
-  const [hundredPercentBodyweight, setHundredPercentBodyweight] = useState(draftData?.rawHundredPercentBodyweight || false)
+  const hundredPercentBodyweight = equipment === 'none'
+  const [routineExercises, setRoutineExercises] = useState(draftData?.routines?.[0]?.exercises || [])
+
+  // Exercise selection states
+  const [showExerciseSearchModal, setShowExerciseSearchModal] = useState(false)
+  const [exerciseSearchQuery, setExerciseSearchQuery] = useState('')
+  const [availableExercises, setAvailableExercises] = useState([])
+  const [exerciseSearchLoading, setExerciseSearchLoading] = useState(false)
+
+  useEffect(() => {
+    if (!showExerciseSearchModal) return
+    setExerciseSearchLoading(true)
+    getExercises({
+      page: 1,
+      pageSize: 50,
+      search: exerciseSearchQuery || undefined,
+      equipmentCategory: hundredPercentBodyweight ? 'none' : undefined,
+    })
+      .then((data) => {
+        let items = data.items || []
+        if (hundredPercentBodyweight) {
+          items = items.filter(e => e.equipment_category !== 'machine' && e.equipment_category !== 'barbell' && e.equipment_category !== 'dumbbell')
+        }
+        setAvailableExercises(items)
+      })
+      .catch(err => console.error(err))
+      .finally(() => setExerciseSearchLoading(false))
+  }, [showExerciseSearchModal, exerciseSearchQuery, hundredPercentBodyweight])
 
   // Diet State
   const [dietPref, setDietPref] = useState(draftData?.rawDietPref || 'None')
@@ -161,7 +189,7 @@ export default function CreatePlanPage() {
 
   // ── Derived Data ──
   const isDirty = name !== '' || startDate !== null || endDate !== null ||
-    (type === 'workout' ? (equipment !== 'dumbbell' || workoutDays.length !== 3 || exerciseType !== 'weight_reps' || muscleGroup !== 'chest' || hundredPercentBodyweight !== false) :
+    (type === 'workout' ? (equipment !== 'dumbbell' || workoutDays.length !== 3 || exerciseType !== 'weight_reps' || muscleGroup !== 'chest') :
       type === 'diet' ? (dietPref !== 'None' || calorieTarget !== '2000' || mealSlots.length !== 4) :
         (injury !== '' || rehabDays.length !== 4))
 
@@ -233,6 +261,13 @@ export default function CreatePlanPage() {
       defaultTab: type.charAt(0).toUpperCase() + type.slice(1),
       status: status, // 'draft' | 'active' | 'planned'
       dateRange: `${formatDateShort(startDate)} → ${formatDateShort(endDate)} · ${durationWeeks} weeks`,
+      routines: type === 'workout' ? [
+        {
+          id: 'default-routine',
+          name: 'Unified Workout Routine',
+          exercises: routineExercises
+        }
+      ] : [],
       detail: type === 'diet'
         ? `Daily calorie target: ${calorieTarget} kcal / day · Goal: ${level}`
         : `Frequency: ${activeDays.length} days / week · Level: ${level}`,
@@ -251,7 +286,7 @@ export default function CreatePlanPage() {
       rawWorkoutDays: workoutDays,
       rawExerciseType: exerciseType,
       rawMuscleGroup: muscleGroup,
-      rawHundredPercentBodyweight: hundredPercentBodyweight,
+      rawHundredPercentBodyweight: equipment === 'none',
       rawDietPref: dietPref,
       rawCalorieTarget: calorieTarget,
       rawMealSlots: mealSlots,
@@ -386,19 +421,8 @@ export default function CreatePlanPage() {
                       value={muscleGroup}
                       onChange={setMuscleGroup}
                       options={MUSCLE_GROUP_OPTIONS}
+                      className="sm:col-span-2"
                     />
-
-                    <div className="flex flex-col gap-2 justify-end pb-2">
-                      <label className="inline-flex items-center gap-2 cursor-pointer select-none">
-                        <input
-                          type="checkbox"
-                          checked={hundredPercentBodyweight}
-                          onChange={e => setHundredPercentBodyweight(e.target.checked)}
-                          className="w-4 h-4 rounded text-workout-prim border-border-primary focus:ring-workout-prim"
-                        />
-                        <span className="text-body-sm font-semibold text-text-headings">100% Bodyweight Exercise</span>
-                      </label>
-                    </div>
                   </div>
 
                   <div className="flex flex-col gap-2">
@@ -406,22 +430,58 @@ export default function CreatePlanPage() {
                     <ToggleGroup options={DAYS} selected={workoutDays} onChange={setWorkoutDays} activeColor="bg-workout-prim" />
                   </div>
 
-                  {/* Day Blocks */}
-                  {workoutDays.length > 0 && (
-                    <div className="flex flex-col gap-3 mt-4">
-                      <label className="text-body-sm font-semibold text-text-headings">Daily Structure</label>
-                      {DAYS.filter(d => workoutDays.includes(d)).map(day => (
-                        <div key={day} className="flex items-center gap-4 p-4 rounded-xl border border-border-primary bg-surface-primary">
-                          <span className="w-10 text-body-md font-bold text-workout-prim">{day}</span>
-                          <div className="flex-1 border-l border-border-primary pl-4">
-                            <button className="text-body-sm font-semibold text-text-disabled border border-dashed border-border-primary rounded-lg px-4 py-2 w-full text-left hover:bg-neutral-100 transition-colors">
-                              + Add Exercise
+                  {/* Routine Builder */}
+                  <div className="flex flex-col gap-4 mt-4">
+                    <div className="flex justify-between items-center border-b border-border-primary pb-3">
+                      <div>
+                        <label className="text-body-sm font-bold text-text-headings">Workout Routine</label>
+                        <p className="text-body-xs text-text-disabled mt-0.5">Customize the exercises included in this training program's central routine.</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowExerciseSearchModal(true)}
+                        className="text-body-xs font-bold text-workout-prim bg-workout-prim/10 hover:bg-workout-prim/20 px-4 py-2 rounded-xl transition-colors shrink-0"
+                      >
+                        + Add Exercise
+                      </button>
+                    </div>
+
+                    {routineExercises.length > 0 ? (
+                      <div className="flex flex-col gap-3">
+                        {routineExercises.map((exercise, index) => (
+                          <div key={index} className="flex items-center justify-between p-4 rounded-xl border border-border-primary bg-surface-primary hover:border-workout-prim transition-all shadow-sm">
+                            <div className="flex items-center gap-3">
+                              <span className="w-6 h-6 rounded-full bg-workout-prim-100 text-workout-prim flex items-center justify-center font-bold text-body-xs">
+                                {index + 1}
+                              </span>
+                              <span className="text-body-md font-bold text-text-headings">{typeof exercise === 'string' ? exercise : exercise.title}</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setRoutineExercises(prev => prev.filter((_, i) => i !== index))}
+                              className="text-text-disabled hover:text-text-error transition-colors p-1"
+                              title="Remove Exercise"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
                             </button>
                           </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="py-8 text-center border-2 border-dashed border-border-primary rounded-2xl bg-neutral-50/50">
+                        <p className="text-body-md font-semibold text-text-disabled mb-1">No Exercises Added Yet</p>
+                        <p className="text-body-xs text-text-disabled mb-4">Click "Add Exercise" to select and build your custom workout routine.</p>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowExerciseSearchModal(true)}
+                        >
+                          Browse Exercise Database
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -605,7 +665,6 @@ export default function CreatePlanPage() {
           setWorkoutDays(['Mon', 'Wed', 'Fri'])
           setExerciseType('weight_reps')
           setMuscleGroup('chest')
-          setHundredPercentBodyweight(false)
           setDietPref('None')
           setCalorieTarget('2000')
           setMealSlots(['Breakfast', 'Lunch', 'Dinner'])
@@ -626,6 +685,106 @@ export default function CreatePlanPage() {
       >
         Please give your plan a name before saving! We need it to help you identify it later.
       </Modal>
+
+      {/* Exercise Search & Selection Modal */}
+      {showExerciseSearchModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-neutral-black/50 backdrop-blur-xs" onClick={() => setShowExerciseSearchModal(false)} />
+          <div className="relative bg-surface-primary rounded-3xl shadow-2xl w-full max-w-md flex flex-col max-h-[80vh] overflow-hidden border border-border-primary animate-scale-up">
+            <div className="px-6 py-5 border-b border-border-primary flex justify-between items-center bg-surface-primary rounded-t-3xl">
+              <div>
+                <h3 className="text-heading-h6 font-bold text-text-headings">Add Exercises to Routine</h3>
+                {hundredPercentBodyweight && (
+                  <p className="text-[11px] font-semibold text-workout-prim mt-0.5">Filtering: Bodyweight Only</p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowExerciseSearchModal(false)}
+                className="text-text-disabled hover:text-text-headings transition-colors"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+              </button>
+            </div>
+
+            {/* Search bar inside modal */}
+            <div className="p-4 border-b border-border-primary bg-neutral-50">
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Search exercises..."
+                  value={exerciseSearchQuery}
+                  onChange={e => setExerciseSearchQuery(e.target.value)}
+                  className="w-full bg-surface-primary border border-border-primary rounded-xl pl-11 pr-4 py-2 text-body-md text-text-body focus:outline-none focus:border-workout-prim shadow-sm transition-all"
+                />
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-text-disabled absolute left-4 top-1/2 -translate-y-1/2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2">
+              {exerciseSearchLoading ? (
+                <div className="py-12 flex flex-col items-center justify-center text-center">
+                  <div className="w-8 h-8 rounded-full border-4 border-workout-prim border-t-transparent animate-spin mb-3" />
+                  <p className="text-body-sm font-semibold text-text-disabled">Loading exercises...</p>
+                </div>
+              ) : availableExercises.length > 0 ? (
+                availableExercises.map((ex) => {
+                  const isAdded = routineExercises.includes(ex.title)
+                  return (
+                    <div
+                      key={ex.id}
+                      onClick={() => {
+                        if (isAdded) {
+                          setRoutineExercises(prev => prev.filter(title => title !== ex.title))
+                        } else {
+                          setRoutineExercises(prev => [...prev, ex.title])
+                        }
+                      }}
+                      className={`flex items-center justify-between p-3.5 rounded-xl border transition-all cursor-pointer select-none ${
+                        isAdded
+                          ? 'border-workout-prim bg-workout-prim-50/10'
+                          : 'border-border-primary bg-surface-primary hover:border-workout-prim/50'
+                      }`}
+                    >
+                      <div className="flex flex-col gap-0.5 text-left">
+                        <span className="text-body-sm font-bold text-text-headings">{ex.title}</span>
+                        <span className="text-[11px] text-text-disabled capitalize">
+                          {ex.muscle_group} · {ex.equipment_category}
+                        </span>
+                      </div>
+                      <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all ${
+                        isAdded ? 'border-workout-prim bg-workout-prim text-neutral-white' : 'border-border-primary'
+                      }`}>
+                        {isAdded && (
+                          <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 stroke-current" viewBox="0 0 24 24" fill="none" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })
+              ) : (
+                <div className="py-12 text-center">
+                  <p className="text-body-md font-semibold text-text-disabled">No matching exercises found.</p>
+                  {hundredPercentBodyweight && (
+                    <p className="text-body-xs text-text-disabled mt-1">Try disabling "Filter Bodyweight-Only Exercises" to see more equipment types.</p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="border-t border-border-primary px-6 py-4 flex bg-neutral-50 shrink-0 rounded-b-3xl">
+              <Button
+                type="button"
+                variant="workout-primary"
+                className="w-full shadow-md"
+                onClick={() => setShowExerciseSearchModal(false)}
+              >
+                Done Adding ({routineExercises.length} selected)
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   )
