@@ -4,6 +4,7 @@ import { cn } from '../components/utils.js'
 import { Button } from '../components/atoms/Button.jsx'
 import { Field } from '../components/atoms/Field.jsx'
 import { DatePicker } from '../components/molecules/DatePicker.jsx'
+import { DefinedField } from '../components/molecules/DefinedField.jsx'
 
 // ── Icons ──────────────────────────────────────────────────────────────────────
 function IconWorkout() {
@@ -19,6 +20,40 @@ function IconRehab() {
 // ── Constants ──────────────────────────────────────────────────────────────────
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const MEAL_SLOTS = ['Breakfast', 'Lunch', 'Dinner', 'Snacks']
+
+const EQUIPMENT_OPTIONS = [
+  { value: 'none', label: 'Bodyweight Only (None)' },
+  { value: 'dumbbell', label: 'Dumbbells' },
+  { value: 'barbell', label: 'Barbell' },
+  { value: 'machine', label: 'Machine' }
+]
+
+const EXERCISE_TYPE_OPTIONS = [
+  { value: 'weight_reps', label: 'Weight & Reps' },
+  { value: 'reps_only', label: 'Reps Only' },
+  { value: 'duration', label: 'Timed Duration' }
+]
+
+const MUSCLE_GROUP_OPTIONS = [
+  { value: 'all', label: 'All Muscles' },
+  { value: 'chest', label: 'Chest' },
+  { value: 'shoulders', label: 'Shoulders' },
+  { value: 'biceps', label: 'Biceps' },
+  { value: 'triceps', label: 'Triceps' },
+  { value: 'upper_back', label: 'Upper Back' },
+  { value: 'lower_back', label: 'Lower Back' },
+  { value: 'core', label: 'Core (Abs)' },
+  { value: 'quads', label: 'Quads' },
+  { value: 'hamstrings', label: 'Hamstrings' },
+  { value: 'calves', label: 'Calves' }
+]
+
+const DIET_PREF_OPTIONS = [
+  { value: 'None', label: 'No Preference' },
+  { value: 'Vegan', label: 'Vegan' },
+  { value: 'Vegetarian', label: 'Vegetarian' },
+  { value: 'Keto', label: 'Keto' }
+]
 
 // ── Components ─────────────────────────────────────────────────────────────────
 function TypeCard({ type, active, onClick, icon, title, desc, activeClass }) {
@@ -103,8 +138,11 @@ export default function CreatePlanPage() {
   const [level, setLevel] = useState(draftData?.rawLevel || (draftData?.rawType === 'diet' ? 'General Health' : draftData?.rawType === 'rehab' ? 'Phase 1 (Pain Management)' : 'Beginner'))
 
   // Workout State
-  const [equipment, setEquipment] = useState(draftData?.rawEquipment || 'Basic Equipment')
+  const [equipment, setEquipment] = useState(draftData?.rawEquipment || 'dumbbell')
   const [workoutDays, setWorkoutDays] = useState(draftData?.rawWorkoutDays || ['Mon', 'Wed', 'Fri'])
+  const [exerciseType, setExerciseType] = useState(draftData?.rawExerciseType || 'weight_reps')
+  const [muscleGroup, setMuscleGroup] = useState(draftData?.rawMuscleGroup || 'chest')
+  const [hundredPercentBodyweight, setHundredPercentBodyweight] = useState(draftData?.rawHundredPercentBodyweight || false)
 
   // Diet State
   const [dietPref, setDietPref] = useState(draftData?.rawDietPref || 'None')
@@ -123,8 +161,8 @@ export default function CreatePlanPage() {
 
   // ── Derived Data ──
   const isDirty = name !== '' || startDate !== null || endDate !== null ||
-    (type === 'workout' ? (equipment !== 'Basic Equipment' || workoutDays.length !== 3) :
-      type === 'diet' ? (dietPref !== 'None' || calorieTarget !== '2000' || mealSlots.length !== 3) :
+    (type === 'workout' ? (equipment !== 'dumbbell' || workoutDays.length !== 3 || exerciseType !== 'weight_reps' || muscleGroup !== 'chest' || hundredPercentBodyweight !== false) :
+      type === 'diet' ? (dietPref !== 'None' || calorieTarget !== '2000' || mealSlots.length !== 4) :
         (injury !== '' || rehabDays.length !== 4))
 
   const handleTypeSwitch = (newType) => {
@@ -149,35 +187,29 @@ export default function CreatePlanPage() {
     return 'Workout Level'
   }
 
-  const renderLevelOptions = () => {
+  const getLevelOptions = () => {
     if (type === 'diet') {
-      return (
-        <>
-          <option value="General Health">General Health & Nutrition</option>
-          <option value="Weight Management">Weight Management (Loss/Gain)</option>
-          <option value="Illness Management">Illness Management (e.g., Diabetes, Hypertension)</option>
-          <option value="Athletic Performance">Athletic Performance & Muscle Building</option>
-        </>
-      )
+      return [
+        { value: 'General Health', label: 'General Health & Nutrition' },
+        { value: 'Weight Management', label: 'Weight Management (Loss/Gain)' },
+        { value: 'Illness Management', label: 'Illness Management (e.g., Diabetes, Hypertension)' },
+        { value: 'Athletic Performance', label: 'Athletic Performance & Muscle Building' }
+      ]
     }
     if (type === 'rehab') {
-      return (
-        <>
-          <option value="Phase 1 (Pain Management)">Phase 1 (Acute Recovery & Pain Management)</option>
-          <option value="Phase 2 (Mobility)">Phase 2 (Range of Motion & Mobility)</option>
-          <option value="Phase 3 (Strengthening)">Phase 3 (Strengthening & Stability)</option>
-          <option value="Phase 4 (Return to Sport)">Phase 4 (Functional Return to Activity)</option>
-        </>
-      )
+      return [
+        { value: 'Phase 1 (Pain Management)', label: 'Phase 1 (Acute Recovery & Pain Management)' },
+        { value: 'Phase 2 (Mobility)', label: 'Phase 2 (Range of Motion & Mobility)' },
+        { value: 'Phase 3 (Strengthening)', label: 'Phase 3 (Strengthening & Stability)' },
+        { value: 'Phase 4 (Return to Sport)', label: 'Phase 4 (Functional Return to Activity)' }
+      ]
     }
-    return (
-      <>
-        <option value="Beginner">Beginner</option>
-        <option value="Intermediate">Intermediate</option>
-        <option value="Advanced">Advanced</option>
-        <option value="All Levels">All Levels</option>
-      </>
-    )
+    return [
+      { value: 'Beginner', label: 'Beginner' },
+      { value: 'Intermediate', label: 'Intermediate' },
+      { value: 'Advanced', label: 'Advanced' },
+      { value: 'All Levels', label: 'All Levels' }
+    ]
   }
 
   // Calculate duration in weeks purely for display purposes
@@ -217,6 +249,9 @@ export default function CreatePlanPage() {
       rawEndDate: endDate ? endDate.toISOString() : null,
       rawEquipment: equipment,
       rawWorkoutDays: workoutDays,
+      rawExerciseType: exerciseType,
+      rawMuscleGroup: muscleGroup,
+      rawHundredPercentBodyweight: hundredPercentBodyweight,
       rawDietPref: dietPref,
       rawCalorieTarget: calorieTarget,
       rawMealSlots: mealSlots,
@@ -308,15 +343,13 @@ export default function CreatePlanPage() {
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-2">
-                  <label className="text-body-sm font-semibold text-text-headings">{getLevelFieldLabel()}</label>
-                  <select
-                    value={level} onChange={e => setLevel(e.target.value)}
-                    className="w-full rounded-xl px-4 py-2.5 text-body-md border border-border-primary focus:outline-none focus:border-neutral-400 bg-surface-primary text-text-body"
-                  >
-                    {renderLevelOptions()}
-                  </select>
-                </div>
+                <DefinedField
+                  id="level-select"
+                  label={getLevelFieldLabel()}
+                  value={level}
+                  onChange={setLevel}
+                  options={getLevelOptions()}
+                />
               </div>
             </section>
 
@@ -328,16 +361,44 @@ export default function CreatePlanPage() {
               {/* WORKOUT SPECIFIC */}
               {type === 'workout' && (
                 <div className="flex flex-col gap-8">
-                  <div className="flex flex-col gap-2">
-                    <label className="text-body-sm font-semibold text-text-headings">Equipment Available</label>
-                    <select
-                      value={equipment} onChange={e => setEquipment(e.target.value)}
-                      className="w-full rounded-xl px-4 py-2.5 text-body-md border border-border-primary focus:outline-none focus:border-workout-prim bg-surface-primary text-text-body"
-                    >
-                      <option value="No Equipment">No Equipment (Bodyweight)</option>
-                      <option value="Basic Equipment">Basic Equipment (Dumbbells, Bands)</option>
-                      <option value="Full Gym">Full Gym</option>
-                    </select>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <DefinedField
+                      id="workout-equipment"
+                      label="Equipment Category"
+                      value={equipment}
+                      onChange={setEquipment}
+                      options={EQUIPMENT_OPTIONS}
+                    />
+
+                    <DefinedField
+                      id="workout-metric"
+                      label="Exercise Metric / Type"
+                      value={exerciseType}
+                      onChange={setExerciseType}
+                      options={EXERCISE_TYPE_OPTIONS}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <DefinedField
+                      id="workout-muscle-focus"
+                      label="Primary Muscle Group Focus"
+                      value={muscleGroup}
+                      onChange={setMuscleGroup}
+                      options={MUSCLE_GROUP_OPTIONS}
+                    />
+
+                    <div className="flex flex-col gap-2 justify-end pb-2">
+                      <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={hundredPercentBodyweight}
+                          onChange={e => setHundredPercentBodyweight(e.target.checked)}
+                          className="w-4 h-4 rounded text-workout-prim border-border-primary focus:ring-workout-prim"
+                        />
+                        <span className="text-body-sm font-semibold text-text-headings">100% Bodyweight Exercise</span>
+                      </label>
+                    </div>
                   </div>
 
                   <div className="flex flex-col gap-2">
@@ -368,19 +429,14 @@ export default function CreatePlanPage() {
               {type === 'diet' && (
                 <div className="flex flex-col gap-8">
                   <div className="flex flex-col sm:flex-row gap-6">
-                    <div className="flex-1 flex flex-col gap-2">
-                      <label className="text-body-sm font-semibold text-text-headings">Dietary Preference</label>
-                      <select
-                        value={dietPref} onChange={e => setDietPref(e.target.value)}
-                        className="w-full rounded-xl px-4 py-2.5 text-body-md border border-border-primary focus:outline-none focus:border-meals-prim bg-surface-primary text-text-body"
-                      >
-                        <option value="None">No Preference</option>
-                        <option value="Vegan">Vegan</option>
-                        <option value="Vegetarian">Vegetarian</option>
-                        <option value="Keto">Keto</option>
-
-                      </select>
-                    </div>
+                    <DefinedField
+                      id="diet-preference"
+                      label="Dietary Preference"
+                      value={dietPref}
+                      onChange={setDietPref}
+                      options={DIET_PREF_OPTIONS}
+                      className="flex-1"
+                    />
                     <div className="flex-1">
                       <Field id="calories" name="calories" label="Daily Calorie Target (kcal)" type="number" value={calorieTarget} onChange={e => setCalorieTarget(e.target.value)} />
                     </div>
@@ -475,9 +531,17 @@ export default function CreatePlanPage() {
                       <span className="text-body-sm text-text-disabled font-medium">Frequency</span>
                       <span className="text-body-sm font-bold text-text-headings">{workoutDays.length} days / week</span>
                     </div>
-                    <div className="flex justify-between items-center pb-1">
+                    <div className="flex justify-between items-center border-b border-border-primary pb-3">
                       <span className="text-body-sm text-text-disabled font-medium">Equipment</span>
-                      <span className="text-body-sm font-bold text-text-headings">{equipment}</span>
+                      <span className="text-body-sm font-bold text-text-headings">{equipment === 'none' ? 'Bodyweight' : equipment}</span>
+                    </div>
+                    <div className="flex justify-between items-center border-b border-border-primary pb-3">
+                      <span className="text-body-sm text-text-disabled font-medium">Muscle Focus</span>
+                      <span className="text-body-sm font-bold text-text-headings">{muscleGroup}</span>
+                    </div>
+                    <div className="flex justify-between items-center pb-1">
+                      <span className="text-body-sm text-text-disabled font-medium">Metric</span>
+                      <span className="text-body-sm font-bold text-text-headings">{exerciseType === 'weight_reps' ? 'Weight & Reps' : exerciseType === 'reps_only' ? 'Reps Only' : 'Timed Duration'}</span>
                     </div>
                   </>
                 )}
@@ -537,8 +601,11 @@ export default function CreatePlanPage() {
           if (pendingType === 'workout') setLevel('Beginner')
           if (pendingType === 'diet') setLevel('General Health')
           if (pendingType === 'rehab') setLevel('Phase 1 (Pain Management)')
-          setEquipment('Basic Equipment')
+          setEquipment('dumbbell')
           setWorkoutDays(['Mon', 'Wed', 'Fri'])
+          setExerciseType('weight_reps')
+          setMuscleGroup('chest')
+          setHundredPercentBodyweight(false)
           setDietPref('None')
           setCalorieTarget('2000')
           setMealSlots(['Breakfast', 'Lunch', 'Dinner'])
