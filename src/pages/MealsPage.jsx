@@ -3,7 +3,7 @@ import { Button } from '../components/atoms/Button.jsx'
 import { cn } from '../components/utils.js'
 import { DefinedField } from '../components/molecules/DefinedField.jsx'
 
-// ── Rich Meal Database (Consistent with Backend Schema) ──────────────────────────
+
 const MEAL_DATABASE = [
   {
     id: 'm1',
@@ -306,7 +306,7 @@ export default function MealsPage() {
 
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="flex flex-col gap-2">
-            <h1 className="text-heading-h3 font-bold text-text-headings">Meal Database</h1>
+            <h1 className="text-heading-h3 font-bold text-text-headings">All Meals</h1>
             <p className="text-body-lg text-text-disabled max-w-xl">
               Discover and select rich, nutritious recipes to customize your personalized diet plans.
             </p>

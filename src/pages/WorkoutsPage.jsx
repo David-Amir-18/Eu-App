@@ -3,7 +3,7 @@ import { Button } from '../components/atoms/Button.jsx'
 import { cn } from '../components/utils.js'
 import { DefinedField } from '../components/molecules/DefinedField.jsx'
 
-// ── Rich Workout/Exercise Database (Consistent with Backend Schema) ───────────────
+
 const EXERCISE_DATABASE = [
   {
     id: "4F5866F8",
@@ -132,8 +132,8 @@ export default function WorkoutsPage() {
     const region = ANATOMICAL_REGIONS.find(r => r.id === activeRegion)
     const matchesMuscle = activeRegion === 'all' || (region && region.subMuscles.includes(ex.muscle_group))
     const matchesEquipment = activeEquipment === 'all' || ex.equipment_category === activeEquipment
-    const matchesSearch = ex.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          (ex.manual_tag && ex.manual_tag.toLowerCase().includes(searchQuery.toLowerCase()))
+    const matchesSearch = ex.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (ex.manual_tag && ex.manual_tag.toLowerCase().includes(searchQuery.toLowerCase()))
     return matchesMuscle && matchesEquipment && matchesSearch
   })
 
@@ -211,7 +211,7 @@ export default function WorkoutsPage() {
 
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="flex flex-col gap-2">
-            <h1 className="text-heading-h3 font-bold text-text-headings">Workout Database</h1>
+            <h1 className="text-heading-h3 font-bold text-text-headings">All Workouts</h1>
             <p className="text-body-lg text-text-disabled max-w-xl">
               Browse professional exercises, view full targeted muscle diagrams, and dynamically add movements to your custom programs.
             </p>
@@ -282,7 +282,7 @@ export default function WorkoutsPage() {
                   </span>
                   {ex.media_type === 'video' && (
                     <span className="absolute bottom-3 right-3 bg-neutral-black/75 text-neutral-white p-1.5 rounded-full shadow">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 fill-current" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 fill-current" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3" /></svg>
                     </span>
                   )}
                 </div>
