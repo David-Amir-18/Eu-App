@@ -4,6 +4,17 @@ import { cn } from '../utils.js'
 import { getUserMetrics } from '../../api/authService.js'
 
 // ── Icons ──────────────────────────────────────────────────────────────────────
+function IconDashboard() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="3" width="7" height="9" rx="1" />
+      <rect x="14" y="3" width="7" height="5" rx="1" />
+      <rect x="14" y="12" width="7" height="9" rx="1" />
+      <rect x="3" y="16" width="7" height="5" rx="1" />
+    </svg>
+  )
+}
 function IconMeals() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none"
@@ -117,7 +128,8 @@ function StatRow({ label, value, max }) {
 
 // ── Nav items ──────────────────────────────────────────────────────────────────
 const navItems = [
-  { to: '/dashboard', label: 'Meals',     icon: <IconMeals />,    end: true },
+  { to: '/dashboard', label: 'Dashboard', icon: <IconDashboard />, end: true },
+  { to: '/meals',     label: 'Meals',     icon: <IconMeals />,    end: false },
   { to: '/workouts',  label: 'Workouts',  icon: <IconWorkouts />, end: false },
   { to: '/plans',     label: 'Plans',     icon: <IconPlans />,    end: false },
   { to: '/profile',   label: 'Account',   icon: <IconProfile />,  end: false },

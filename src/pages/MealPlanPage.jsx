@@ -468,10 +468,10 @@ export default function MealPlanPage() {
         <img src={MOCK_PLAN.image} alt={MOCK_PLAN.name} className="w-full h-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-t from-neutral-black via-neutral-black/40 to-transparent" />
         <div className="absolute inset-0 flex flex-col justify-between p-6">
-          <button onClick={() => navigate('/dashboard')}
+          <button onClick={() => navigate(-1)}
             className="flex items-center gap-1 text-body-sm text-neutral-white font-semibold self-start hover:opacity-80 transition-opacity">
             <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-            Dashboard
+            Back
           </button>
           <div className="flex items-end justify-between">
             <div>
