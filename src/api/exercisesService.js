@@ -80,6 +80,13 @@ export async function getExercise(exerciseId) {
 
 // ── Admin: create exercise ─────────────────────────────────────────────────────
 export async function createExercise(payload) {
+  const isSimulating = localStorage.getItem('dev_sim_admin') === 'true'
+  
+  if (isSimulating) {
+    console.warn("[SimDev] Simulation active. Faking Exercise Creation for UI feedback.")
+    return { id: `sim-${Date.now()}`, ...payload, is_custom: false, is_archived: false, secondary_muscles: [] }
+  }
+
   const res = await fetch(`${API_URL}/exercises/`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
@@ -92,6 +99,13 @@ export async function createExercise(payload) {
 
 // ── Admin: update exercise ─────────────────────────────────────────────────────
 export async function updateExercise(exerciseId, payload) {
+  const isSimulating = localStorage.getItem('dev_sim_admin') === 'true'
+  
+  if (isSimulating) {
+    console.warn("[SimDev] Simulation active. Faking Exercise Update for UI feedback.")
+    return { id: exerciseId, ...payload, secondary_muscles: [] }
+  }
+
   const res = await fetch(`${API_URL}/exercises/${exerciseId}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
@@ -104,6 +118,13 @@ export async function updateExercise(exerciseId, payload) {
 
 // ── Admin: archive exercise ────────────────────────────────────────────────────
 export async function archiveExercise(exerciseId) {
+  const isSimulating = localStorage.getItem('dev_sim_admin') === 'true'
+  
+  if (isSimulating) {
+    console.warn("[SimDev] Simulation active. Faking Exercise Archive for UI feedback.")
+    return { id: exerciseId, is_archived: true }
+  }
+
   const res = await fetch(`${API_URL}/exercises/${exerciseId}`, {
     method: 'DELETE',
     headers: authHeaders(),

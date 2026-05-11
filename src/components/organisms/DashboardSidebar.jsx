@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { cn } from '../utils.js'
 import { getUserMetrics } from '../../api/authService.js'
+import { useAuth } from '../../context/AuthContext.jsx'
 
 // ── Icons ──────────────────────────────────────────────────────────────────────
 function IconDashboard() {
@@ -92,6 +93,25 @@ function IconFire() {
   )
 }
 
+function IconAdmin() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+      <circle cx="12" cy="11" r="3" />
+    </svg>
+  )
+}
+
+function IconBolt() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" 
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+    </svg>
+  )
+}
+
 // ── Streak badge ───────────────────────────────────────────────────────────────
 function StreakBadge({ label, count }) {
   return (
@@ -127,22 +147,27 @@ function StatRow({ label, value, max }) {
 }
 
 // ── Nav items ──────────────────────────────────────────────────────────────────
-const navItems = [
-  { to: '/dashboard', label: 'Dashboard', icon: <IconDashboard />, end: true },
-  { to: '/meals',     label: 'Meals',     icon: <IconMeals />,    end: false },
-  { to: '/workouts',  label: 'Workouts',  icon: <IconWorkouts />, end: false },
-  { to: '/plans',     label: 'Plans',     icon: <IconPlans />,    end: false },
-  { to: '/profile',   label: 'Account',   icon: <IconProfile />,  end: false },
-  { to: '/notifications', label: 'Notifications', icon: <IconNotifications />, end: false },
-  { to: '/settings',  label: 'Settings',  icon: <IconSettings />, end: false },
-  { to: '/help',      label: 'Help',      icon: <IconHelp />,     end: false },
-]
-
-// ── Component ──────────────────────────────────────────────────────────────────
 export function DashboardSidebar() {
+  const { isAdmin, toggleAdminSimulation } = useAuth()
   const [profile, setProfile] = useState(null)
   const userId = localStorage.getItem('user_id')
   const username = localStorage.getItem('username') || 'User'
+
+  const baseNavItems = [
+    { to: '/dashboard', label: 'Dashboard', icon: <IconDashboard />, end: true },
+    { to: '/meals',     label: 'Meals',     icon: <IconMeals />,    end: false },
+    { to: '/workouts',  label: 'Workouts',  icon: <IconWorkouts />, end: false },
+    { to: '/plans',     label: 'Plans',     icon: <IconPlans />,    end: false },
+    { to: '/profile',   label: 'Account',   icon: <IconProfile />,  end: false },
+    { to: '/notifications', label: 'Notifications', icon: <IconNotifications />, end: false },
+    { to: '/settings',  label: 'Settings',  icon: <IconSettings />, end: false },
+    { to: '/help',      label: 'Help',      icon: <IconHelp />,     end: false },
+  ]
+
+  const resolvedNav = isAdmin 
+    ? [...baseNavItems.slice(0, 1), { to: '/admin', label: 'Admin Hub', icon: <IconAdmin />, end: false }, ...baseNavItems.slice(1)] 
+    : baseNavItems
+
 
   useEffect(() => {
     if (!userId) return
@@ -180,7 +205,7 @@ export function DashboardSidebar() {
 
       {/* Nav */}
       <nav className="flex flex-col gap-1 px-3 py-4 flex-1">
-        {navItems.map(({ to, label, icon, end }) => (
+        {resolvedNav.map(({ to, label, icon, end }) => (
           <NavLink
             key={to}
             to={to}
@@ -199,6 +224,23 @@ export function DashboardSidebar() {
           </NavLink>
         ))}
       </nav>
+
+      {/* Dev Controls */}
+      <div className="px-3 py-2 border-t border-border-primary">
+         <button 
+          onClick={toggleAdminSimulation}
+          className={cn(
+            "flex items-center justify-between w-full gap-3 px-3 py-2 rounded-lg text-body-sm font-bold transition-colors",
+            isAdmin ? "bg-success-100 text-success-600" : "bg-neutral-100 text-neutral-600"
+          )}
+         >
+           <div className="flex items-center gap-2">
+              <IconBolt />
+              <span>Simulate Admin</span>
+           </div>
+           <div className={cn("w-3 h-3 rounded-round", isAdmin ? "bg-success-500" : "bg-neutral-400")} />
+         </button>
+      </div>
 
       {/* Logout */}
       <div className="px-3 py-4 border-t border-border-primary">

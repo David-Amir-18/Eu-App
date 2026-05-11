@@ -13,6 +13,7 @@ export function useAuth() {
 // ── Provider ───────────────────────────────────────────────────────────────────
 export function AuthProvider({ children }) {
   const [user, setUser]       = useState(null)   // { id, email, name }
+  const [isAdmin, setIsAdmin] = useState(() => localStorage.getItem('dev_sim_admin') === 'true')
   const [loading, setLoading] = useState(true)   // true while we verify the token on mount
   const isRefreshing = useRef(false)
   const pendingQueue = useRef([])                 // requests waiting for the refresh to finish
@@ -150,9 +151,17 @@ export function AuthProvider({ children }) {
     setUser(null)
   }
 
+  function toggleAdminSimulation() {
+    setIsAdmin(prev => {
+      const next = !prev
+      localStorage.setItem('dev_sim_admin', next ? 'true' : 'false')
+      return next
+    })
+  }
+
   // ── Context value ─────────────────────────────────────────────────────────────
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, apiFetch }}>
+    <AuthContext.Provider value={{ user, isAdmin, toggleAdminSimulation, loading, login, register, logout, apiFetch }}>
       {children}
     </AuthContext.Provider>
   )
