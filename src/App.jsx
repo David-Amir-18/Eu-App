@@ -6,7 +6,6 @@ import LoginPage from './pages/LoginPage.jsx'
 import RegisterPage from './pages/RegisterPage.jsx'
 import OnboardingPage from './pages/OnboardingPage.jsx'
 import Contact from './pages/Contact.jsx'
-
 import DashboardPage from './pages/DashboardPage.jsx'
 import WorkoutPlanPage from './pages/WorkoutPlanPage.jsx'
 import MealPlanPage from './pages/MealPlanPage.jsx'
@@ -16,6 +15,7 @@ import MealsPage from './pages/MealsPage.jsx'
 import RehabPlanPage from './pages/RehabPlanPage.jsx'
 import CreatePlanPage from './pages/CreatePlanPage.jsx'
 import WorkoutsPage from './pages/WorkoutsPage.jsx'
+
 
 
 function App() {

@@ -55,12 +55,18 @@ const TABS = ['All', 'Active', 'Completed', 'Drafts']
 export default function PlansPage() {
   const [activeTab, setActiveTab] = useState('All')
 
-  // Load custom plans from localStorage and combine with ALL_PLANS
+  // Load custom plans from localStorage and combine with ALL_PLANS.
+  // Auto-purge stale workout plans that pre-date backend integration (no backendId).
   const [plans, setPlans] = useState(() => {
     try {
       const stored = localStorage.getItem('user_plans')
       const parsed = stored ? JSON.parse(stored) : []
-      return [...parsed, ...ALL_PLANS]
+      // Remove any Workout plans that don't have a real backend UUID (backendId)
+      const cleaned = parsed.filter(p => !(p.defaultTab === 'Workout' && !p.backendId))
+      if (cleaned.length !== parsed.length) {
+        localStorage.setItem('user_plans', JSON.stringify(cleaned))
+      }
+      return [...cleaned, ...ALL_PLANS]
     } catch {
       return ALL_PLANS
     }

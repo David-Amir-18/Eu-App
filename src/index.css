@@ -404,6 +404,15 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
+  @keyframes pureFadeIn {
+    0% {
+      opacity: 0;
+    }
+    100% {
+      opacity: 1;
+    }
+  }
+
   @keyframes fadeSlideUp {
     0% {
       opacity: 0;
@@ -416,6 +425,10 @@
   }
 
   .animate-fade-in {
+    animation: pureFadeIn 0.5s ease-out forwards;
+  }
+
+  .animate-fade-slide-up {
     animation: fadeSlideUp 0.6s ease-out forwards;
   }
 }
