@@ -4,51 +4,6 @@ import { PlanCard } from '../components/molecules/PlanCard.jsx'
 import { Button } from '../components/atoms/Button.jsx'
 import { cn } from '../components/utils.js'
 
-// ── Mock plans ─────────────────────────────────────────────────────────────────
-const ALL_PLANS = [
-  {
-    id: 'diabetes-friendly',
-    name: 'Diabetes\nfriendly',
-    defaultTab: 'Diet',
-    status: 'active',
-    dateRange: 'Jan 01, 2026 → Feb 01, 2026 · 4 weeks',
-    detail: 'Daily calorie target: kcal / day · Goal: Lose Weight',
-    detailColor: 'bg-success-500',
-    progress: 10,
-    progressMax: 30,
-    sessions: 10,
-    sessionsMax: 30,
-    ctaLabel: 'Log a meal',
-  },
-  {
-    id: 'full-body',
-    name: 'Full Body',
-    defaultTab: 'Workout',
-    status: 'active',
-    dateRange: 'Jan 01, 2026 → Feb 15, 2026 · 6 weeks',
-    detail: 'Frequency: 4 days / week · Level: Beginner',
-    detailColor: 'bg-error-400',
-    progress: 12,
-    progressMax: 24,
-    sessions: 12,
-    sessionsMax: 24,
-    ctaLabel: 'Log a workout',
-  },
-  {
-    id: 'acl-injury',
-    name: 'ACL Injury',
-    defaultTab: 'Rehab',
-    status: 'completed',
-    dateRange: 'Nov 01, 2025 → Dec 15, 2025 · 6 weeks',
-    detail: 'Frequency: 4 days / week · Level: Beginner',
-    detailColor: 'bg-secondary-500',
-    progress: 24,
-    progressMax: 24,
-    sessions: 24,
-    sessionsMax: 24,
-    ctaLabel: 'View Results',
-  }
-]
 
 const TABS = ['All', 'Active', 'Completed', 'Drafts']
 
@@ -66,7 +21,7 @@ export default function PlansPage() {
       if (cleaned.length !== parsed.length) {
         localStorage.setItem('user_plans', JSON.stringify(cleaned))
       }
-      return [...cleaned, ...ALL_PLANS]
+      return [...cleaned]
     } catch {
       return ALL_PLANS
     }
