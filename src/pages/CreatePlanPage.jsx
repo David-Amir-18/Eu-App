@@ -581,12 +581,7 @@ export default function CreatePlanPage() {
           }
         }
 
-        // Step 4: Save minimal reference to localStorage and navigate to plan
-        const existing = localStorage.getItem('user_plans')
-        let plans = existing ? JSON.parse(existing) : []
-        if (draftData?.id) plans = plans.filter(p => p.id !== draftData.id)
-        plans.push({ ...newPlan, id: createdPlan.id, backendId: createdPlan.id })
-        localStorage.setItem('user_plans', JSON.stringify(plans))
+        // Navigate to plan detail — PlansPage will fetch fresh from backend
         navigate(`/plans/workout/${createdPlan.id}`)
         return
       } catch (error) {
@@ -611,12 +606,7 @@ export default function CreatePlanPage() {
           if (!meal) continue
           await addMealSlot(createdPlan.id, { meal_id: meal.id, meal_type: slotType })
         }
-        // Save reference and navigate
-        const existing = localStorage.getItem('user_plans')
-        let plans = existing ? JSON.parse(existing) : []
-        if (draftData?.id) plans = plans.filter(p => p.id !== draftData.id)
-        plans.push({ ...newPlan, id: createdPlan.id, backendId: createdPlan.id })
-        localStorage.setItem('user_plans', JSON.stringify(plans))
+        // Navigate to plans list — PlansPage will fetch fresh from backend
         navigate('/plans')
         return
       } catch (error) {
@@ -661,11 +651,7 @@ export default function CreatePlanPage() {
           }
         }
 
-        const existing = localStorage.getItem('user_plans')
-        let plans = existing ? JSON.parse(existing) : []
-        if (draftData?.id) plans = plans.filter(p => p.id !== draftData.id)
-        plans.push({ ...newPlan, id: createdPlan.id, backendId: createdPlan.id })
-        localStorage.setItem('user_plans', JSON.stringify(plans))
+        // Navigate to rehab plan detail — PlansPage will fetch fresh from backend
         navigate(`/plans/rehab/${createdPlan.id}`)
         return
       } catch (error) {
@@ -674,14 +660,6 @@ export default function CreatePlanPage() {
         return
       }
     }
-
-    // Save to localStorage (rehab / other)
-    const existing = localStorage.getItem('user_plans')
-    let plans = existing ? JSON.parse(existing) : []
-    if (draftData?.id) plans = plans.filter(p => p.id !== draftData.id)
-    plans.push(newPlan)
-    localStorage.setItem('user_plans', JSON.stringify(plans))
-    navigate('/plans')
   }
 
   return (

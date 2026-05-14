@@ -117,6 +117,7 @@ export async function getUserMetrics() {
   const res = await fetch(`${API_URL}/auth/health-profile`, {
     headers: authHeaders(),
   })
+  if (res.status === 404) return null  // User hasn't created a health profile yet
   const data = await res.json()
   if (!res.ok) throw new Error(data.detail || 'Failed to fetch health profile')
   return data

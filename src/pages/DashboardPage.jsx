@@ -157,22 +157,46 @@ export default function DashboardPage() {
         console.error('Failed to fetch workout plans:', e)
       }
       
-      // Fetching meal/diet plan details for today's meals card
+      // Fetch diet/meal plan from backend — first plan in the user's list
       try {
         const mPlans = await getMealPlans()
-        const storedPlans = localStorage.getItem('user_plans')
-        const hasStoredDiet = storedPlans ? JSON.parse(storedPlans).some(p => p.defaultTab === 'Diet' || p.id === 'custom-diet-plan') : false
-        setHasMealHistory((mPlans && mPlans.length > 0) || hasStoredDiet)
+        setHasMealHistory(mPlans && mPlans.length > 0)
 
-        if (storedPlans) {
-            const plans = JSON.parse(storedPlans)
-            const dPlan = plans.find(p => p.id === 'custom-diet-plan' || p.defaultTab === 'Diet')
-            if (dPlan) setDietPlan(dPlan)
+        if (mPlans && mPlans.length > 0) {
+          const fullPlan = await getMealPlan(mPlans[0].id)
+
+          // Normalise backend slot_meals into the shape dashboard cards expect:
+          // { id, label, time, meals: [{ id, title/name, calories, image_url }], selectedMealId, taken }
+          const SLOT_TIMES = {
+            breakfast: '7:00 AM',
+            lunch:     '12:30 PM',
+            dinner:    '7:00 PM',
+            snack:     '3:00 PM',
+          }
+
+          const normalised = fullPlan.slot_meals.map(sm => ({
+            id:             sm.id,
+            label:          sm.meal_type.charAt(0).toUpperCase() + sm.meal_type.slice(1),
+            time:           SLOT_TIMES[sm.meal_type] || '',
+            meals: sm.meal ? [{
+              id:        sm.meal.id,
+              name:      sm.meal.title,
+              title:     sm.meal.title,
+              calories:  sm.meal.nutrition?.calories_cal || 0,
+              protein:   sm.meal.nutrition?.protein_g || 0,
+              image_url: sm.meal.image_url,
+              image:     sm.meal.image_url,
+            }] : [],
+            selectedMealId: sm.meal?.id ?? null,
+            taken:          false,   // transient client-side state
+          }))
+
+          setDietPlan({ ...fullPlan, slots: normalised })
         }
       } catch (e) {
-         console.error('Failed to parse diet plan', e)
+        console.error('Failed to fetch diet plan from backend:', e)
       } finally {
-         setPlansLoading(false)
+        setPlansLoading(false)
       }
 
       // Fetch live telemetry summaries from current calendar year
@@ -260,24 +284,11 @@ export default function DashboardPage() {
   }
 
   const toggleMeal = (slotId) => {
-      if (!dietPlan) return
-      const newPlan = { ...dietPlan }
-      newPlan.slots = newPlan.slots.map(sl => {
-          if (sl.id === slotId) {
-              return { ...sl, taken: !sl.taken }
-          }
-          return sl
-      })
-      setDietPlan(newPlan)
-      try {
-          const stored = localStorage.getItem('user_plans')
-          const plans = stored ? JSON.parse(stored) : []
-          const updated = plans.map(p => {
-              if (p.id === newPlan.id) return newPlan
-              return p
-          })
-          localStorage.setItem('user_plans', JSON.stringify(updated))
-      } catch(e){}
+    if (!dietPlan) return
+    setDietPlan(prev => ({
+      ...prev,
+      slots: prev.slots.map(sl => sl.id === slotId ? { ...sl, taken: !sl.taken } : sl)
+    }))
   }
 
   // Find today's routine

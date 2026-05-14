@@ -112,6 +112,7 @@ export function AuthProvider({ children }) {
 
       async function checkAccess(t) {
         try {
+          // Probe the admin-only endpoint — 403 = regular user (expected), true = admin
           const probe = await fetch(`${import.meta.env.VITE_API_URL}/auth/users`, { headers: { Authorization: `Bearer ${t}` } })
           setIsAdmin(probe.ok)
         } catch {

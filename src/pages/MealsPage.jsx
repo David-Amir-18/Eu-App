@@ -5,13 +5,11 @@ import { DefinedField } from "../components/molecules/DefinedField.jsx";
 import { getMeals, getFilterOptions, getMeal } from "../api/mealsService.js";
 
 export default function MealsPage() {
-  const [activeTab, setActiveTab] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedMeal, setSelectedMeal] = useState(null);
-
-  // New States for API integration
+  const [filterGroups, setFilterGroups] = useState([]); // [{ name, tags }]
+  const [activeFilters, setActiveFilters] = useState({}); // { groupName: selectedTag }
   const [meals, setMeals] = useState([]);
-  const [tags, setTags] = useState([]);
   const [totalRecords, setTotalRecords] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [useProfile, setUseProfile] = useState(false);
@@ -49,16 +47,16 @@ export default function MealsPage() {
       console.error(e);
     }
 
-    // Fetch tags
-    const fetchTags = async () => {
+    // Fetch filter groups from the backend
+    const fetchFilters = async () => {
       try {
         const res = await getFilterOptions();
-        setTags(res.tags || []);
+        setFilterGroups(res.groups || []);
       } catch (err) {
-        console.error("Failed to fetch tags", err);
+        console.error("Failed to fetch filter options", err);
       }
     };
-    fetchTags();
+    fetchFilters();
   }, []);
 
   // Fetch meals when filters or page change
@@ -70,7 +68,8 @@ export default function MealsPage() {
           page: currentPage,
           page_size: pageSize,
           search: searchQuery,
-          tag: activeTab,
+          // Collect the first selected tag across all groups
+          tag: Object.values(activeFilters).find(Boolean) || undefined,
           use_profile: useProfile,
         });
         
@@ -88,12 +87,36 @@ export default function MealsPage() {
       fetchMeals();
     }, 300);
     return () => clearTimeout(timeoutId);
-  }, [currentPage, searchQuery, activeTab, useProfile]);
+  }, [currentPage, searchQuery, activeFilters, useProfile]);
 
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, activeTab, useProfile]);
+  }, [searchQuery, activeFilters, useProfile]);
+
+  // Handle a group dropdown selection — selecting in one group clears others
+  function handleGroupFilter(groupName, tagValue) {
+    setActiveFilters(prev => {
+      if (prev[groupName] === tagValue) {
+        // Clicking the same tag again deselects it
+        const next = { ...prev };
+        delete next[groupName];
+        return next;
+      }
+      // Only one active tag at a time (API takes a single `tag` param)
+      const fresh = {};
+      if (tagValue) fresh[groupName] = tagValue;
+      return fresh;
+    });
+  }
+
+  function clearAllFilters() {
+    setActiveFilters({});
+    setSearchQuery('');
+    setUseProfile(false);
+  }
+
+  const hasActiveFilters = Object.keys(activeFilters).length > 0 || !!searchQuery || useProfile;
 
   // Fetch detailed meal
   const handleMealClick = async (mealItem) => {
@@ -218,9 +241,12 @@ export default function MealsPage() {
       )}
 
       {/* ── Header Area ── */}
-      <div className="shrink-0 bg-surface-primary border-b border-border-primary pt-12 pb-8 px-8 md:px-12 relative overflow-hidden animate-fade-in">
-        <div className="absolute top-[-50px] right-[-50px] w-64 h-64 bg-meals-prim rounded-full opacity-30 blur-3xl" />
-        <div className="absolute bottom-[-50px] left-[10%] w-48 h-48 bg-meals-sec rounded-full opacity-25 blur-3xl" />
+      <div className="shrink-0 bg-surface-primary border-b border-border-primary pt-12 pb-8 px-8 md:px-12 relative animate-fade-in">
+        {/* Decorative blobs — clipped independently so they don't affect dropdown overflow */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute top-[-50px] right-[-50px] w-64 h-64 bg-meals-prim rounded-full opacity-30 blur-3xl" />
+          <div className="absolute bottom-[-50px] left-[10%] w-48 h-48 bg-meals-sec rounded-full opacity-25 blur-3xl" />
+        </div>
 
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="flex flex-col gap-2">
@@ -273,34 +299,39 @@ export default function MealsPage() {
           </div>
         </div>
 
-        {/* Dynamic Tab Filters */}
-        <div className="flex flex-wrap gap-2 mt-8 bg-neutral-100 p-1.5 rounded-xl border border-border-primary w-fit relative z-10">
-          <button
-            onClick={() => setActiveTab("all")}
-            className={cn(
-              "px-4 py-1.5 rounded-lg text-body-sm font-semibold transition-all capitalize",
-              activeTab === "all"
-                ? "bg-surface-primary text-meals-prim shadow-sm border border-border-primary"
-                : "text-text-disabled hover:text-text-headings",
+        {/* ── Filter Dropdowns (one per group from /meals/filters) ── */}
+        {filterGroups.length > 0 && (
+          <div className="mt-8 relative z-50 flex flex-wrap items-end gap-3">
+            {filterGroups.map((group) => {
+              const activeTag = activeFilters[group.name]
+              return (
+                <DefinedField
+                  key={group.name}
+                  id={`filter-${group.name.replace(/\s+/g, '-').toLowerCase()}`}
+                  label={group.name}
+                  placeholder={`All ${group.name}`}
+                  value={activeTag || ''}
+                  options={group.tags.map(tag => ({ value: tag, label: tag }))}
+                  onChange={(val) => handleGroupFilter(group.name, val)}
+                  className="w-48 shrink-0"
+                />
+              )
+            })}
+
+            {/* Clear all pill — only shown when something is active */}
+            {hasActiveFilters && (
+              <button
+                onClick={clearAllFilters}
+                className="mb-0.5 flex items-center gap-1.5 px-3 py-2 rounded-lg text-body-sm font-semibold border border-border-primary text-text-disabled hover:border-meals-prim hover:text-meals-prim transition-colors bg-surface-primary shrink-0"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+                Clear Filters
+              </button>
             )}
-          >
-            All
-          </button>
-          {tags.map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={cn(
-                "px-4 py-1.5 rounded-lg text-body-sm font-semibold transition-all capitalize",
-                activeTab === tab
-                  ? "bg-surface-primary text-meals-prim shadow-sm border border-border-primary"
-                  : "text-text-disabled hover:text-text-headings",
-              )}
-            >
-              {tab}
-            </button>
-          ))}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* ── Grid List Content ── */}

@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { cn } from '../components/utils.js'
 import { Button } from '../components/atoms/Button.jsx'
 import { getMeal, getMeals, getFilterOptions } from '../api/mealsService.js'
+import { getMealPlan } from '../api/mealPlansService.js'
 
 
 
@@ -560,60 +561,54 @@ export default function MealPlanPage() {
   const navigate = useNavigate()
   const { id } = useParams()
 
-  const [plan] = useState(() => {
-    try {
-      const stored = localStorage.getItem('user_plans')
-      const plans = stored ? JSON.parse(stored) : []
-      const found = plans.find(p => p.id === id)
-      if (found) {
-        if (!found.calorieTarget && found.detail) {
-          const kcalMatch = found.detail.match(/(\d+)\s*kcal/i)
-          found.calorieTarget = kcalMatch ? parseInt(kcalMatch[1]) : 2000
-        }
-        return found
-      }
-    } catch (e) {
-      console.error(e)
-    }
-    return MOCK_PLAN
-  })
+  const [plan, setPlan]       = useState(null)
+  const [slots, setSlots]     = useState([])
+  const [pageLoading, setPageLoading] = useState(true)
+  const [pageError, setPageError]     = useState(null)
 
-  const [slots, setSlots] = useState(() => {
-    if (plan.slots) return plan.slots
-    if (plan.mealSlots) {
-      return plan.mealSlots.map(label => ({
-        id: label.toLowerCase(),
-        label: label,
-        time: label === 'Breakfast' ? '7:00 AM' : label === 'Lunch' ? '12:30 PM' : '7:00 PM',
-        meals: [],
-        selectedMealId: null,
-        taken: false
-      }))
-    }
-    return MOCK_SLOTS
-  })
+  // ── Load plan from backend ────────────────────────────────────────────────
+  useEffect(() => {
+    if (!id) return
+    setPageLoading(true)
+    setPageError(null)
+    getMealPlan(id)
+      .then(data => {
+        // Extract calorie target from description if present
+        const kcalMatch = (data.description || '').match(/(\d+)\s*kcal/i)
+        const calorieTarget = kcalMatch ? parseInt(kcalMatch[1]) : 2000
+
+        setPlan({ ...data, calorieTarget })
+
+        // Map backend slot_meals → MealSlotCard format
+        const SLOT_TIMES = {
+          breakfast: '08:00 AM', lunch: '01:00 PM',
+          dinner: '07:00 PM', snack: '04:00 PM',
+        }
+        const mappedSlots = (data.slot_meals ?? []).map(s => ({
+          id: s.id,
+          label: s.meal_type.charAt(0).toUpperCase() + s.meal_type.slice(1),
+          time: SLOT_TIMES[s.meal_type] ?? '12:00 PM',
+          taken: false,
+          meals: s.meal ? [{
+            id: s.meal_id,
+            name: s.meal.title,
+            image: s.meal.image_url,
+            calories: s.meal.nutrition?.calories_cal ?? 0,
+            protein:  s.meal.nutrition?.protein_g ?? 0,
+            carbs:    s.meal.nutrition?.carbohydrates_g ?? 0,
+            fat:      s.meal.nutrition?.total_fat_g ?? 0,
+            warning:  null,
+          }] : [],
+          selectedMealId: s.meal_id ?? null,
+        }))
+        setSlots(mappedSlots)
+      })
+      .catch(err => setPageError(err.message || 'Failed to load meal plan.'))
+      .finally(() => setPageLoading(false))
+  }, [id])
 
   const [showEditStructure, setShowEditStructure] = useState(false)
   const [editCollectionSlot, setEditCollectionSlot] = useState(null)
-
-  // Sync slots to localStorage for custom plans
-  useEffect(() => {
-    if (plan.id === 'diabetes-friendly') return
-    try {
-      const stored = localStorage.getItem('user_plans')
-      const plans = stored ? JSON.parse(stored) : []
-      const updated = plans.map(p => {
-        if (p.id === plan.id) {
-          return { ...p, slots }
-        }
-        return p
-      })
-      localStorage.setItem('user_plans', JSON.stringify(updated))
-    } catch (e) {
-      console.error(e)
-    }
-  }, [slots, plan.id])
-
   const totalCalories = slots.reduce((sum, slot) => {
     const meal = slot.meals.find(m => m.id === slot.selectedMealId) || slot.meals[0]
     return sum + (slot.taken && meal ? meal.calories : 0)
@@ -659,15 +654,31 @@ export default function MealPlanPage() {
     ))
   }
 
-  const caloriePct = Math.min(100, Math.round((totalCalories / plan.calorieTarget) * 100))
+  const caloriePct = Math.min(100, Math.round((totalCalories / (plan?.calorieTarget || 2000)) * 100))
   const takenCount = slots.filter(s => s.taken).length
+
+  // ── Loading / error screens ──────────────────────────────────────────
+  if (pageLoading) return (
+    <div className="flex flex-col min-h-screen items-center justify-center gap-4 bg-surface-page">
+      <div className="w-10 h-10 border-4 border-meals-prim border-t-transparent rounded-full animate-spin" />
+      <p className="text-body-md text-text-disabled font-medium">Loading meal plan...</p>
+    </div>
+  )
+
+  if (pageError || !plan) return (
+    <div className="flex flex-col min-h-screen items-center justify-center gap-4 bg-surface-page px-8">
+      <p className="text-body-lg font-bold text-text-headings">Failed to load plan</p>
+      <p className="text-body-md text-text-disabled text-center">{pageError || 'Plan not found.'}</p>
+      <button onClick={() => navigate(-1)} className="text-meals-prim font-semibold underline text-body-md">Go back</button>
+    </div>
+  )
 
   return (
     <div className="flex flex-col min-h-screen bg-surface-page">
 
       {/* ── Banner ── */}
       <div className="relative h-56 shrink-0 overflow-hidden">
-        <img src={plan.image || 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=1200&q=80'} alt={plan.name} className="w-full h-full object-cover" />
+        <img src={plan.image_url || 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=1200&q=80'} alt={plan.title} className="w-full h-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-t from-neutral-black via-neutral-black/40 to-transparent" />
         <div className="absolute inset-0 flex flex-col justify-between p-6">
           <button onClick={() => navigate(-1)}
@@ -679,10 +690,10 @@ export default function MealPlanPage() {
             <div>
               <div className="flex items-center gap-2 mb-1">
                 <span className="bg-meals-prim-100 text-meals-prim text-body-sm font-bold px-2 py-0.5 rounded-round">Diet</span>
-                <span className="bg-error-100 text-error-500 text-body-sm font-bold px-2 py-0.5 rounded-round">{plan.level || plan.condition || 'General Health'}</span>
+                <span className="bg-error-100 text-error-500 text-body-sm font-bold px-2 py-0.5 rounded-round">{plan.goal_type || plan.level || plan.condition || 'General Health'}</span>
               </div>
-              <h1 className="text-heading-h4 font-bold text-neutral-white">{plan.name}</h1>
-              <p className="text-body-sm text-neutral-200">{plan.dateRange || `${plan.startDate} → ${plan.endDate}`}</p>
+              <h1 className="text-heading-h4 font-bold text-neutral-white">{plan.title || plan.name}</h1>
+              <p className="text-body-sm text-neutral-200">{plan.dateRange || (plan.start_date && plan.end_date ? `${plan.start_date} → ${plan.end_date}` : 'Ongoing')}</p>
             </div>
             <Button variant="meals-outline" size="sm" className="border-neutral-white text-neutral-white hover:bg-neutral-white/10" onClick={() => setShowEditStructure(true)}>Edit</Button>
           </div>
