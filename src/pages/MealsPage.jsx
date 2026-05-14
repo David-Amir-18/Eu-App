@@ -218,7 +218,7 @@ export default function MealsPage() {
       )}
 
       {/* ── Header Area ── */}
-      <div className="bg-surface-primary border-b border-border-primary pt-12 pb-8 px-8 md:px-12 relative overflow-hidden animate-fade-in">
+      <div className="shrink-0 bg-surface-primary border-b border-border-primary pt-12 pb-8 px-8 md:px-12 relative overflow-hidden animate-fade-in">
         <div className="absolute top-[-50px] right-[-50px] w-64 h-64 bg-meals-prim rounded-full opacity-30 blur-3xl" />
         <div className="absolute bottom-[-50px] left-[10%] w-48 h-48 bg-meals-sec rounded-full opacity-25 blur-3xl" />
 
