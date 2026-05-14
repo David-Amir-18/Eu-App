@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getUserMetrics, saveUserMetrics } from '../api/authService.js'
+import { getUserMetrics, saveUserMetrics, getMe } from '../api/authService.js'
 import { cn } from '../components/utils.js'
 import { Menu } from '../components/molecules/Menu.jsx'
 
@@ -86,41 +86,40 @@ function StatCard({ title, value, subtitle, icon, colorClass, bgClass }) {
 
 
 export default function ProfilePage() {
+  const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const [isEditing, setIsEditing] = useState(false)
   const [editData, setEditData] = useState(null)
   const [saving, setSaving] = useState(false)
 
-
-  const userId = localStorage.getItem('user_id')
-  const username = localStorage.getItem('username') || 'User'
-  const email = localStorage.getItem('email') || 'user@example.com' // Mock email or fetch from API
-
   useEffect(() => {
-    if (!userId) {
-      setLoading(false)
-      return
+    const fetchAll = async () => {
+      try {
+        setLoading(true)
+        const [me, metrics] = await Promise.all([
+          getMe(),
+          getUserMetrics()
+        ])
+        setUser(me)
+        setProfile(metrics)
+      } catch (err) {
+        console.error('Failed to fetch user or profile:', err)
+      } finally {
+        setLoading(false)
+      }
     }
-    getUserMetrics(userId)
-      .then(data => {
-        setProfile(data)
-      })
-      .catch(err => {
-        console.error('Failed to fetch profile:', err)
-        setProfile(null)
-      })
-      .finally(() => setLoading(false))
-  }, [userId])
+    fetchAll()
+  }, [])
 
   const handleEditClick = () => {
     setEditData({
-      Age: profile?.Age || '',
-      Weight: profile?.Weight || '',
-      Height: profile?.Height || '',
-      PrimaryGoal: profile?.PrimaryGoal || 'Maintain',
-      FitnessLevel: profile?.FitnessLevel || 'Beginner',
-      ActivityLevel: profile?.ActivityLevel || 'Sedentary',
+      age: profile?.age ?? '',
+      weight: profile?.weight ?? '',
+      height: profile?.height ?? '',
+      primary_goal: profile?.primary_goal || 'Maintain',
+      fitness_level: profile?.fitness_level || 'Beginner',
+      activity_level: profile?.activity_level || 'Sedentary',
     })
     setIsEditing(true)
   }
@@ -128,11 +127,21 @@ export default function ProfilePage() {
   const handleSave = async () => {
     try {
       setSaving(true)
-      const updatedProfile = await saveUserMetrics(userId, editData)
+      // Ensure numeric types are actually numbers for the backend schema
+      const payload = {
+        ...editData,
+        age: parseInt(editData.age) || 0,
+        weight: parseFloat(editData.weight) || 0.0,
+        height: parseFloat(editData.height) || 0.0,
+        gender: profile?.gender || null, // Preserve gender or set to null
+      }
+      
+      console.log('Saving profile payload:', payload)
+      const updatedProfile = await saveUserMetrics(payload)
       setProfile(updatedProfile)
       setIsEditing(false)
     } catch (err) {
-      console.error('Failed to save profile:', err)
+      console.error('Failed to save profile error detail:', err)
       alert(err.message || 'Failed to save profile')
     } finally {
       setSaving(false)
@@ -144,8 +153,8 @@ export default function ProfilePage() {
     setEditData(prev => ({ ...prev, [name]: value }))
   }
 
-  const bmi = profile?.Weight && profile?.Height
-    ? (parseFloat(profile.Weight) / Math.pow(parseFloat(profile.Height) / 100, 2)).toFixed(1)
+  const bmi = profile?.weight && profile?.height
+    ? (parseFloat(profile.weight) / Math.pow(parseFloat(profile.height) / 100, 2)).toFixed(1)
     : '—'
 
   let bmiDetail = ''
@@ -168,20 +177,20 @@ export default function ProfilePage() {
         <div className="relative z-10 flex flex-col md:flex-row items-center md:items-start gap-6">
           <div className="w-24 h-24 md:w-32 md:h-32 rounded-full bg-gradient-to-br from-surface-action to-surface-action-hover border-4 border-neutral-white shadow-lg flex items-center justify-center shrink-0">
             <span className="text-heading-h3 md:text-heading-h2 font-bold text-neutral-white uppercase">
-              {username.slice(0, 2)}
+              {user?.name?.slice(0, 2) || '??'}
             </span>
           </div>
           <div className="flex flex-col items-center md:items-start text-center md:text-left pt-2">
-            <h1 className="text-heading-h3 font-bold text-text-headings">{username}</h1>
-            <p className="text-body-md text-text-disabled mt-1">{email}</p>
+            <h1 className="text-heading-h3 font-bold text-text-headings">{user?.name || 'Loading...'}</h1>
+            <p className="text-body-md text-text-disabled mt-1">{user?.email || '—'}</p>
             
             <div className="flex items-center gap-2 mt-4">
               <span className="px-3 py-1 bg-surface-action-hover2 text-text-action text-body-sm font-semibold rounded-round">
                 Member
               </span>
-              {profile?.FitnessLevel && (
+              {profile?.fitness_level && (
                 <span className="px-3 py-1 bg-neutral-200 text-text-body text-body-sm font-semibold rounded-round capitalize">
-                  {profile.FitnessLevel} Level
+                  {profile.fitness_level} Level
                 </span>
               )}
             </div>
@@ -212,34 +221,18 @@ export default function ProfilePage() {
               
 
               {/* Summary Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-                <StatCard 
-                  title="Meals Streak" 
-                  value={profile?.CurrentStreak || 0} 
-                  subtitle="Days in a row" 
-                  icon={<IconFire />} 
-                  colorClass="bg-warning-100 text-warning-500"
-                  bgClass="bg-surface-primary"
-                />
-                <StatCard 
-                  title="Workout Streak" 
-                  value={profile?.CurrentStreak || 0} 
-                  subtitle="Days in a row" 
-                  icon={<IconFire />} 
-                  colorClass="bg-error-100 text-error-500"
-                  bgClass="bg-surface-primary"
-                />
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-5">
                 <StatCard 
                   title="Total Workouts" 
-                  value="24" 
-                  subtitle="Completed this month" 
+                  value="—" 
+                  subtitle="Completed overall" 
                   icon={<IconDumbbell />} 
                   colorClass="bg-information-100 text-information-500"
                   bgClass="bg-surface-primary"
                 />
                 <StatCard 
-                  title="Avg. Daily Calories" 
-                  value={profile?.DailyCalorieTarget || '2,000'} 
+                  title="Daily Calorie Goal" 
+                  value={profile?.daily_calorie_target?.toLocaleString() || '—'} 
                   subtitle="Target daily intake" 
                   icon={<IconApple />} 
                   colorClass="bg-success-100 text-success-600"
@@ -256,18 +249,18 @@ export default function ProfilePage() {
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-5">
                 <DataCard 
                   label="Age" 
-                  value={profile?.Age || '—'} 
+                  value={profile?.age || '—'} 
                   unit="yrs"
                 />
                 <DataCard 
                   label="Weight" 
-                  value={profile?.Weight || '—'} 
+                  value={profile?.weight || '—'} 
                   unit="kg" 
-                  detail={profile?.PrimaryGoal === 'LoseWeight' ? 'Goal: Decrease' : profile?.PrimaryGoal === 'GainMuscle' ? 'Goal: Increase' : 'Goal: Maintain'}
+                  detail={profile?.primary_goal === 'LoseWeight' ? 'Goal: Decrease' : profile?.primary_goal === 'GainMuscle' ? 'Goal: Increase' : 'Goal: Maintain'}
                 />
                 <DataCard 
                   label="Height" 
-                  value={profile?.Height || '—'} 
+                  value={profile?.height || '—'} 
                   unit="cm" 
                 />
                 <DataCard 
@@ -277,55 +270,14 @@ export default function ProfilePage() {
                 />
                 <DataCard 
                   label="Daily Activity" 
-                  value={profile?.ActivityLevel ? profile.ActivityLevel.replace(/([A-Z])/g, ' $1').trim() : '—'} 
+                  value={profile?.activity_level ? profile.activity_level.replace(/([A-Z])/g, ' $1').trim() : '—'} 
                   detail="Activity Level"
                 />
               </div>
             </section>
 
-            {/* ── Goals & Progress ──────────────────────────────────────────────── */}
-            <section aria-label="Goals and Progress" className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="bg-surface-primary rounded-xl p-6 border border-border-primary shadow-sm flex flex-col">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="p-2 bg-surface-action-hover2 rounded-lg text-text-action">
-                    <IconChart />
-                  </div>
-                  <h3 className="text-heading-h6 font-bold text-text-headings">Monthly Goal Progress</h3>
-                </div>
-                
-                <div className="flex flex-col gap-6 flex-1 justify-center">
-                  <div className="flex flex-col gap-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-body-md font-semibold text-text-body">Weight Goal</span>
-                      <span className="text-body-md font-bold text-text-headings">65%</span>
-                    </div>
-                    <div className="w-full h-2.5 bg-neutral-100 rounded-round overflow-hidden">
-                      <div className="h-full bg-surface-action rounded-round transition-all duration-1000 w-[65%]" />
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col gap-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-body-md font-semibold text-text-body">Workout Consistency</span>
-                      <span className="text-body-md font-bold text-text-headings">80%</span>
-                    </div>
-                    <div className="w-full h-2.5 bg-neutral-100 rounded-round overflow-hidden">
-                      <div className="h-full bg-success-500 rounded-round transition-all duration-1000 w-[80%]" />
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col gap-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-body-md font-semibold text-text-body">Diet Adherence</span>
-                      <span className="text-body-md font-bold text-text-headings">90%</span>
-                    </div>
-                    <div className="w-full h-2.5 bg-neutral-100 rounded-round overflow-hidden">
-                      <div className="h-full bg-warning-400 rounded-round transition-all duration-1000 w-[90%]" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
+            {/* ── Premium Status ──────────────────────────────────────────────── */}
+            <section aria-label="Membership Status" className="grid grid-cols-1 gap-6">
               <div className="bg-gradient-to-br from-surface-disabled to-neutral-200 rounded-xl p-8 shadow-sm flex flex-col items-center justify-center text-center relative overflow-hidden opacity-80 cursor-not-allowed">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-neutral-white opacity-20 rounded-full translate-x-1/2 -translate-y-1/2" />
                 <div className="absolute bottom-0 left-0 w-40 h-40 bg-neutral-black opacity-5 rounded-full -translate-x-1/2 translate-y-1/2" />
@@ -365,8 +317,8 @@ export default function ProfilePage() {
                 <label className="text-body-sm font-semibold text-text-body">Age (yrs)</label>
                 <input 
                   type="number" 
-                  name="Age" 
-                  value={editData.Age} 
+                  name="age" 
+                  value={editData.age} 
                   onChange={handleChange}
                   className="px-3 py-2 border border-border-primary rounded-lg focus:outline-none focus:border-surface-action"
                 />
@@ -377,8 +329,8 @@ export default function ProfilePage() {
                   <input 
                     type="number" 
                     step="0.1"
-                    name="Weight" 
-                    value={editData.Weight} 
+                    name="weight" 
+                    value={editData.weight} 
                     onChange={handleChange}
                     className="px-3 py-2 border border-border-primary rounded-lg focus:outline-none focus:border-surface-action"
                   />
@@ -387,8 +339,8 @@ export default function ProfilePage() {
                   <label className="text-body-sm font-semibold text-text-body">Height (cm)</label>
                   <input 
                     type="number" 
-                    name="Height" 
-                    value={editData.Height} 
+                    name="height" 
+                    value={editData.height} 
                     onChange={handleChange}
                     className="px-3 py-2 border border-border-primary rounded-lg focus:outline-none focus:border-surface-action"
                   />
@@ -397,8 +349,8 @@ export default function ProfilePage() {
               <div className="flex flex-col gap-1">
                 <label className="text-body-sm font-semibold text-text-body">Primary Goal</label>
                 <select 
-                  name="PrimaryGoal" 
-                  value={editData.PrimaryGoal} 
+                  name="primary_goal" 
+                  value={editData.primary_goal} 
                   onChange={handleChange}
                   className="px-3 py-2 border border-border-primary rounded-lg focus:outline-none focus:border-surface-action"
                 >
@@ -410,8 +362,8 @@ export default function ProfilePage() {
               <div className="flex flex-col gap-1">
                 <label className="text-body-sm font-semibold text-text-body">Fitness Level</label>
                 <select 
-                  name="FitnessLevel" 
-                  value={editData.FitnessLevel} 
+                  name="fitness_level" 
+                  value={editData.fitness_level} 
                   onChange={handleChange}
                   className="px-3 py-2 border border-border-primary rounded-lg focus:outline-none focus:border-surface-action"
                 >
@@ -423,8 +375,8 @@ export default function ProfilePage() {
               <div className="flex flex-col gap-1">
                 <label className="text-body-sm font-semibold text-text-body">Activity Level</label>
                 <select 
-                  name="ActivityLevel" 
-                  value={editData.ActivityLevel} 
+                  name="activity_level" 
+                  value={editData.activity_level} 
                   onChange={handleChange}
                   className="px-3 py-2 border border-border-primary rounded-lg focus:outline-none focus:border-surface-action"
                 >
@@ -460,3 +412,4 @@ export default function ProfilePage() {
     </div>
   )
 }
+
