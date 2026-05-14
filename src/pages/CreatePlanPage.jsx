@@ -368,6 +368,7 @@ export default function CreatePlanPage() {
           {
             exercise_id: pendingExercise.id,
             title: pendingExercise.title,
+            thumbnail_url: pendingExercise.thumbnail_url || null,
             sets: exerciseConfig.sets ? Number(exerciseConfig.sets) : null,
             reps: exerciseConfig.reps ? Number(exerciseConfig.reps) : null,
             weight_kg: exerciseConfig.weight_kg ? Number(exerciseConfig.weight_kg) : null,
@@ -477,7 +478,11 @@ export default function CreatePlanPage() {
           name: r.name,
           description: r.description || null,
           assignedDays: r.assignedDays || [],
-          exercises: r.exercises.map(ex => ex.title),
+          exercises: r.exercises.map(ex => ({
+            title: ex.title,
+            thumbnail_url: ex.thumbnail_url || null,
+            taken: false
+          })),
         }))
         : [],
       detail: type === 'diet'

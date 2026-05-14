@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { cn } from '../components/utils.js'
 import { Button } from '../components/atoms/Button.jsx'
-import { getMeal,getMeals, getFilterOptions } from '../api/mealsService.js'
+import { getMeal, getMeals, getFilterOptions } from '../api/mealsService.js'
 
 
 
@@ -633,13 +633,13 @@ export default function MealPlanPage() {
   }
 
   function randomMeal(slotId) {
-    setSlots(s => s.map(sl => {
-      if (sl.id !== slotId) return sl
-      const others = sl.meals.filter(m => m.id !== sl.selectedMealId)
-      if (!others.length) return sl
-      const pick = others[Math.floor(Math.random() * others.length)]
-      return { ...sl, selectedMealId: pick.id }
-    }))
+    const sl = slots.find(s => s.id === slotId)
+    if (!sl) return
+    const others = sl.meals.filter(m => m.id !== sl.selectedMealId)
+    if (!others.length) return
+    const pick = others[Math.floor(Math.random() * others.length)]
+    
+    selectMeal(slotId, pick.id)
   }
 
   function saveStructure(newSlots) {
@@ -666,7 +666,7 @@ export default function MealPlanPage() {
     <div className="flex flex-col min-h-screen bg-surface-page">
 
       {/* ── Banner ── */}
-      <div className="relative h-56 overflow-hidden">
+      <div className="relative h-56 shrink-0 overflow-hidden">
         <img src={plan.image || 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=1200&q=80'} alt={plan.name} className="w-full h-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-t from-neutral-black via-neutral-black/40 to-transparent" />
         <div className="absolute inset-0 flex flex-col justify-between p-6">

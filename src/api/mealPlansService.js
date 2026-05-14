@@ -46,6 +46,14 @@ export async function getMealPlans() {
   return data // MealPlanListItem[]
 }
 
+/** GET /meal/plans/templates — list admin templates */
+export async function getMealPlanTemplates() {
+  const res = await fetch(`${API_URL}/meal/plans/templates`, { headers: authHeaders() })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.detail || 'Failed to fetch meal plan templates')
+  return data // MealPlanListItem[]
+}
+
 /**
  * POST /meal/plans/ — create a meal plan
  * payload: { title, description?, goal_type?, start_date?, end_date? }

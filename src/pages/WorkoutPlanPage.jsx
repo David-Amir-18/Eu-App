@@ -3,8 +3,10 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { cn } from '../components/utils.js'
 import { Button } from '../components/atoms/Button.jsx'
 import { Field } from '../components/atoms/Field.jsx'
+import { DatePicker } from '../components/molecules/DatePicker.jsx'
+import { DefinedField } from '../components/molecules/DefinedField.jsx'
 import { getExercises } from '../api/exercisesService.js'
-import { getWorkoutPlan, createRoutine, deleteRoutine, addExerciseToRoutine } from '../api/workoutsService.js'
+import { getWorkoutPlan, createRoutine, deleteRoutine, addExerciseToRoutine, updateWorkoutPlan, updateRoutine, cloneRoutine } from '../api/workoutsService.js'
 
 const WEEK_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const WEEK_DAYS_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -299,6 +301,169 @@ function PlanStructure({ plan, onSlotClick }) {
   )
 }
 
+// ── Edit Plan Modal ───────────────────────────────────────────────────────────
+function EditPlanModal({ open, onClose, plan, onSaved }) {
+  const [title, setTitle] = useState(plan?.title || '')
+  const [description, setDescription] = useState(plan?.description || '')
+  const [level, setLevel] = useState(plan?.difficulty_level || 'beginner')
+  const [startDate, setStartDate] = useState(plan?.start_date ? new Date(plan.start_date) : null)
+  const [endDate, setEndDate] = useState(plan?.end_date ? new Date(plan.end_date) : null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (plan && open) {
+      setTitle(plan.title || '')
+      setDescription(plan.description || '')
+      setLevel(plan.difficulty_level || 'beginner')
+      setStartDate(plan.start_date ? new Date(plan.start_date) : null)
+      setEndDate(plan.end_date ? new Date(plan.end_date) : null)
+      setError('')
+    }
+  }, [plan, open])
+
+  async function handleSave() {
+    if (!title.trim()) { setError('Plan title is required.'); return }
+    setLoading(true); setError('')
+    try {
+      await updateWorkoutPlan(plan.id, {
+        title: title.trim(),
+        description: description.trim() || null,
+        difficulty_level: level,
+        start_date: startDate ? startDate.toISOString().split('T')[0] : null,
+        end_date: endDate ? endDate.toISOString().split('T')[0] : null,
+      })
+      onSaved()
+      onClose()
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const difficultyOptions = [
+    { value: 'beginner', label: 'Beginner' },
+    { value: 'intermediate', label: 'Intermediate' },
+    { value: 'advanced', label: 'Advanced' }
+  ]
+
+  return (
+    <Modal open={open} onClose={onClose} title="Edit Workout Plan" size="md">
+      <div className="flex flex-col gap-4">
+        <Field id="edit-plan-title" name="title" label="Plan Name" value={title} onChange={e => setTitle(e.target.value)} />
+        <Field id="edit-plan-desc" name="description" label="Description" value={description} onChange={e => setDescription(e.target.value)} />
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="flex-1">
+            <DatePicker id="edit-start-date" label="Start Date" value={startDate} onChange={setStartDate} placeholder="Select start date" />
+          </div>
+          <div className="flex-1">
+            <DatePicker id="edit-end-date" label="End Date" value={endDate} onChange={setEndDate} minDate={startDate || undefined} placeholder="Select end date" />
+          </div>
+        </div>
+        <DefinedField id="edit-plan-level" label="Difficulty Level" value={level} onChange={setLevel} options={difficultyOptions} />
+      </div>
+      {error && <p className="text-body-sm text-text-error">{error}</p>}
+      <div className="flex gap-3 pt-2">
+        <Button variant="workout-outline" size="md" onClick={onClose} className="flex-1">Cancel</Button>
+        <Button variant="workout-primary" size="md" onClick={handleSave} loading={loading} className="flex-1">Save Changes</Button>
+      </div>
+    </Modal>
+  )
+}
+
+// ── Edit Routine Modal ────────────────────────────────────────────────────────
+function EditRoutineModal({ open, onClose, routine, plan, onUpdated }) {
+  const [name, setName] = useState('')
+  const [dayNumber, setDayNumber] = useState('')
+  const [dayOfWeek, setDayOfWeek] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (routine && open) {
+      setName(routine.name || '')
+      setDayNumber(routine.day_number || '')
+      setDayOfWeek(routine.day_of_week ?? '')
+      setError('')
+    }
+  }, [routine, open])
+
+  async function handleUpdate() {
+    if (!name.trim()) { setError('Routine name is required.'); return }
+    setLoading(true); setError('')
+    try {
+      const payload = {
+        name: name.trim(),
+        ...(plan.schedule_type === 'nday'
+          ? { day_number: parseInt(dayNumber) || (plan.plan_routines.length + 1) }
+          : { day_of_week: dayOfWeek !== '' ? parseInt(dayOfWeek) : null }),
+      }
+      await updateRoutine(routine.id, payload)
+      onUpdated()
+      onClose()
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleDuplicate() {
+    if (plan.schedule_type !== 'weekly') {
+      setError('Duplication is currently only supported for weekly schedules.')
+      return
+    }
+    const newDay = prompt('Enter the new Day of Week (0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat):')
+    if (newDay === null || newDay === '') return
+    const parsedDay = parseInt(newDay)
+    if (isNaN(parsedDay) || parsedDay < 0 || parsedDay > 6) {
+      setError('Invalid day entered.')
+      return
+    }
+    setLoading(true); setError('')
+    try {
+      await cloneRoutine(plan.id, routine.id, parsedDay)
+      onUpdated()
+      onClose()
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (!routine) return null
+
+  return (
+    <Modal open={open} onClose={onClose} title="Edit Routine" size="sm">
+      <Field id="edit-routine-name" name="name" label="Routine Name" value={name} onChange={e => setName(e.target.value)} />
+      {plan?.schedule_type === 'nday' ? (
+        <Field id="edit-day-number" name="dayNumber" label="Day Number" type="number" value={dayNumber} onChange={e => setDayNumber(e.target.value)} />
+      ) : (
+        <div className="flex flex-col gap-1">
+          <label className="text-body-sm font-semibold text-text-headings">Assigned Day</label>
+          <select value={dayOfWeek} onChange={e => setDayOfWeek(e.target.value)}
+            className="rounded-md px-3 py-2 text-body-sm border border-border-primary focus:outline-none focus:border-workout-prim bg-surface-primary text-text-body">
+            <option value="">Select day…</option>
+            {WEEK_DAYS.map((d, i) => <option key={d} value={i}>{d}</option>)}
+          </select>
+        </div>
+      )}
+      {error && <p className="text-body-sm text-text-error">{error}</p>}
+      <div className="flex gap-3">
+        <Button variant="workout-outline" size="md" onClick={onClose} className="flex-1">Cancel</Button>
+        <Button variant="workout-primary" size="md" onClick={handleUpdate} loading={loading} className="flex-1">Save Changes</Button>
+      </div>
+      <div className="pt-2 border-t border-border-primary mt-2">
+        <Button variant="neutral" size="sm" fullWidth onClick={handleDuplicate} loading={loading} className="border border-border-primary">
+          Duplicate to Another Day
+        </Button>
+      </div>
+    </Modal>
+  )
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function WorkoutPlanPage() {
   const navigate = useNavigate()
@@ -308,6 +473,9 @@ export default function WorkoutPlanPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [showAddRoutine, setShowAddRoutine] = useState(false)
+  const [showEditPlan, setShowEditPlan] = useState(false)
+  const [showEditRoutine, setShowEditRoutine] = useState(false)
+  const [editingRoutine, setEditingRoutine] = useState(null)
   const [activeRoutine, setActiveRoutine] = useState(null)
   const [showLog, setShowLog] = useState(false)
 
@@ -383,7 +551,7 @@ export default function WorkoutPlanPage() {
     <div className="flex flex-col min-h-screen bg-surface-page">
 
       {/* ── Banner ── */}
-      <div className="relative h-56 overflow-hidden bg-workout-prim">
+      <div className="relative h-56 shrink-0 overflow-hidden bg-workout-prim">
         <div className="absolute inset-0 bg-gradient-to-br from-workout-prim via-workout-prim-600 to-workout-prim-700 opacity-90" />
         <div className="absolute inset-0 flex flex-col justify-between p-6">
           <button onClick={() => navigate(-1)}
@@ -403,6 +571,7 @@ export default function WorkoutPlanPage() {
                 {' · '}{plan.schedule_type === 'weekly' ? 'Weekly schedule' : `${plan.plan_routines?.length || 0}-day cycle`}
               </p>
             </div>
+            <Button variant="workout-outline" size="sm" className="border-neutral-white text-neutral-white hover:bg-neutral-white/10" onClick={() => setShowEditPlan(true)}>Edit</Button>
           </div>
         </div>
       </div>
@@ -489,6 +658,7 @@ export default function WorkoutPlanPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <Button variant="workout-outline" size="sm" onClick={() => setActiveRoutine(routine)}>View</Button>
+                    <Button variant="workout-outline" size="sm" onClick={() => { setEditingRoutine(routine); setShowEditRoutine(true) }}>Edit</Button>
                     <Button variant="workout-primary" size="sm" onClick={() => { setActiveRoutine(routine); setShowLog(true) }}>Log</Button>
                   </div>
                 </div>
@@ -516,6 +686,25 @@ export default function WorkoutPlanPage() {
         open={showLog}
         onClose={() => setShowLog(false)}
         routine={activeRoutine || todayRoutine}
+      />
+      <EditPlanModal
+        open={showEditPlan}
+        onClose={() => setShowEditPlan(false)}
+        plan={plan}
+        onSaved={fetchPlan}
+      />
+      <EditRoutineModal
+        open={showEditRoutine}
+        onClose={() => setShowEditRoutine(false)}
+        routine={editingRoutine}
+        plan={plan}
+        onUpdated={() => {
+          fetchPlan()
+          // Optionally refresh activeRoutine if it's the one being edited
+          if (activeRoutine?.id === editingRoutine?.id) {
+            handleRoutineUpdated()
+          }
+        }}
       />
     </div>
   )

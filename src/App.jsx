@@ -15,37 +15,42 @@ import MealsPage from './pages/MealsPage.jsx'
 import RehabPlanPage from './pages/RehabPlanPage.jsx'
 import CreatePlanPage from './pages/CreatePlanPage.jsx'
 import WorkoutsPage from './pages/WorkoutsPage.jsx'
-
+import { AuthProvider } from './context/AuthContext.jsx' 
+import ProtectedRoute from './protectedRoutes/ProtectedRoutes.jsx'
 
 
 function App() {
   return (
-    <BrowserRouter>
-      <Routes>
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          {/* Public Routes */}
+          <Route element={<AppLayout />}>
+            <Route index element={<Home />} />
+          </Route>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/contact" element={<Contact />} />
 
-        <Route element={<AppLayout />}>
-          <Route index element={<Home />} />
-        </Route>
+          {/* Protected Routes */}
+          <Route element={<ProtectedRoute />}>
+            <Route element={<DashboardLayout />}>
+              <Route path="/dashboard" element={<DashboardPage />} />
+              <Route path="/meals" element={<MealsPage />} />
+              <Route path="/workouts" element={<WorkoutsPage />} />
+              <Route path="/plans" element={<PlansPage />} />
+              <Route path="/plans/create" element={<CreatePlanPage />} />
+              <Route path="/plans/workout/:id" element={<WorkoutPlanPage />} />
+              <Route path="/plans/rehab/:id" element={<RehabPlanPage />} />
+              <Route path="/plans/diet/:id" element={<MealPlanPage />} />
+              <Route path="/profile" element={<ProfilePage />} />
+              <Route path="/onboarding" element={<OnboardingPage />} />
+            </Route>
+          </Route>
 
-        <Route element={<DashboardLayout />}>
-          <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/meals" element={<MealsPage />} />
-          <Route path="/workouts" element={<WorkoutsPage />} />
-          <Route path="/plans" element={<PlansPage />} />
-          <Route path="/plans/create" element={<CreatePlanPage />} />
-          <Route path="/plans/workout/:id" element={<WorkoutPlanPage />} />
-          <Route path="/plans/rehab/:id" element={<RehabPlanPage />} />
-          <Route path="/plans/diet/:id" element={<MealPlanPage />} />
-          <Route path="/profile" element={<ProfilePage />} />
-        </Route>
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
-        <Route path="/onboarding" element={<OnboardingPage />} />
-        <Route path="/contact" element={<Contact />} />
-
-      </Routes>
-    </BrowserRouter>
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   )
 }
-
 export default App
