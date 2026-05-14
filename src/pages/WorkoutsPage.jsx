@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react'
 import { Button } from '../components/atoms/Button.jsx'
 import { DefinedField } from '../components/molecules/DefinedField.jsx'
-import { getExercises } from '../api/exercisesService.js'
+import { getExercises, getExerciseFilters } from '../api/exercisesService.js'
 
 const PAGE_SIZE = 20
 
-const MUSCLE_OPTIONS = [
+const STATIC_MUSCLE_OPTIONS = [
   { value: 'all', label: 'All Muscles' },
   { value: 'chest', label: 'Chest' },
   { value: 'shoulders', label: 'Shoulders' },
@@ -23,14 +23,14 @@ const MUSCLE_OPTIONS = [
   { value: 'calves', label: 'Calves' },
 ]
 
-const TYPE_OPTIONS = [
+const STATIC_TYPE_OPTIONS = [
   { value: 'all', label: 'All Types' },
   { value: 'weight_reps', label: 'Weight + Reps' },
   { value: 'reps_only', label: 'Reps Only' },
   { value: 'duration', label: 'Duration' },
 ]
 
-const EQUIPMENT_OPTIONS = [
+const STATIC_EQUIPMENT_OPTIONS = [
   { value: 'all', label: 'All Equipment' },
   { value: 'barbell', label: 'Barbell' },
   { value: 'dumbbell', label: 'Dumbbell' },
@@ -51,6 +51,11 @@ export default function WorkoutsPage() {
   const [pages, setPages] = useState(0)
   const [total, setTotal] = useState(0)
 
+  // Live Dynamic Filter Options from Database
+  const [muscleOptions, setMuscleOptions] = useState(STATIC_MUSCLE_OPTIONS)
+  const [typeOptions, setTypeOptions] = useState(STATIC_TYPE_OPTIONS)
+  const [equipmentOptions, setEquipmentOptions] = useState(STATIC_EQUIPMENT_OPTIONS)
+
   // Plans / Add-to-Plan State
   const [userPlans, setUserPlans] = useState([])
   const [showAddToPlanModal, setShowAddToPlanModal] = useState(false)
@@ -58,6 +63,47 @@ export default function WorkoutsPage() {
   const [targetPlanId, setTargetPlanId] = useState('')
   const [targetRoutineId, setTargetRoutineId] = useState('')
   const [toastMessage, setToastMessage] = useState('')
+
+  // Helper to format DB slugs (e.g., "upper_back" -> "Upper Back")
+  const capitalizeWords = (str) => {
+    if (!str) return ''
+    return str
+      .split('_')
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ')
+  }
+
+  // Load dynamic dropdown values on mount
+  useEffect(() => {
+    getExerciseFilters()
+      .then(data => {
+        if (data.muscle_groups?.length > 0) {
+          const mapped = data.muscle_groups.map(val => ({
+            value: val,
+            label: capitalizeWords(val)
+          }))
+          setMuscleOptions([{ value: 'all', label: 'All Muscles' }, ...mapped])
+        }
+        if (data.exercise_types?.length > 0) {
+          const mapped = data.exercise_types.map(val => ({
+            value: val,
+            label: capitalizeWords(val)
+          }))
+          setTypeOptions([{ value: 'all', label: 'All Types' }, ...mapped])
+        }
+        if (data.equipment_categories?.length > 0) {
+          const mapped = data.equipment_categories.map(val => ({
+            value: val,
+            label: capitalizeWords(val)
+          }))
+          setEquipmentOptions([{ value: 'all', label: 'All Equipment' }, ...mapped])
+        }
+      })
+      .catch(err => {
+        console.warn('Notice: Active filter fetch failed, gracefully falling back to local options.', err)
+      })
+  }, [])
+
 
   useEffect(() => {
     setPage(1)
@@ -221,7 +267,7 @@ export default function WorkoutsPage() {
                 label=""
                 value={activeEquipment}
                 onChange={setActiveEquipment}
-                options={EQUIPMENT_OPTIONS}
+                options={equipmentOptions}
                 className="[&>label]:hidden"
               />
             </div>
@@ -234,7 +280,7 @@ export default function WorkoutsPage() {
             label=""
             value={activeMuscle}
             onChange={setActiveMuscle}
-            options={MUSCLE_OPTIONS}
+            options={muscleOptions}
             className="[&>label]:hidden"
           />
           <DefinedField
@@ -242,7 +288,7 @@ export default function WorkoutsPage() {
             label=""
             value={activeType}
             onChange={setActiveType}
-            options={TYPE_OPTIONS}
+            options={typeOptions}
             className="[&>label]:hidden"
           />
           <Button
@@ -258,6 +304,7 @@ export default function WorkoutsPage() {
             Clear Filters
           </Button>
         </div>
+
       </div>
 
       {/* ── Grid List Content ── */}

@@ -1,59 +1,123 @@
+// ── Imports ────────────────────────────────────────────────────────────────────
+
 const API_URL = import.meta.env.VITE_API_URL
 
-function authHeaders() {
+/**
+ * Helper to perform authenticated fetch requests to the rehab endpoints.
+ */
+async function apiFetch(endpoint, options = {}) {
   const token = localStorage.getItem('token')
-  return token ? { Authorization: `Bearer ${token}` } : {}
+  const headers = {
+    'Content-Type': 'application/json',
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Pragma': 'no-cache',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(options.headers || {}),
+  }
+
+  const response = await fetch(`${API_URL}${endpoint}`, { ...options, headers })
+
+  if (!response.ok) {
+    let errorMessage = 'An error occurred'
+    try {
+      const errorData = await response.json()
+      errorMessage = errorData.detail || errorData.message || errorMessage
+    } catch (e) {
+      errorMessage = response.statusText
+    }
+    throw new Error(errorMessage)
+  }
+
+  // Handle 204 No Content
+  if (response.status === 204) return null
+
+  return response.json()
 }
 
-/**
- * GET /rehab/exercises
- * Returns exercises scoped to the user's condition, or all exercises.
- */
-export async function getRehabExercises() {
-  const res = await fetch(`${API_URL}/rehab/exercises`, {
-    headers: {
-      ...authHeaders(),
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-      'Pragma': 'no-cache',
-    },
-  })
-  if (!res.ok) throw new Error('Failed to fetch rehab exercises')
-  return await res.json()
+// ── Conditions & Exercises ───────────────────────────────────────────────────
+
+export async function getConditions() {
+  return apiFetch('/rehab/conditions')
 }
 
-/**
- * GET /rehab/conditions
- * Returns all available rehab conditions/injuries.
- */
-export async function getRehabConditions() {
-  const res = await fetch(`${API_URL}/rehab/conditions`, {
-    headers: {
-      ...authHeaders(),
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-      'Pragma': 'no-cache',
-    },
-  })
-  if (!res.ok) throw new Error('Failed to fetch rehab conditions')
-  return await res.json()
-}
-
-/**
- * PUT /rehab/my-condition
- * Updates the user's active rehab condition.
- */
 export async function setMyCondition(conditionId, injuryDetails = null, recoveryStage = null) {
-  const res = await fetch(`${API_URL}/rehab/my-condition`, {
+  return apiFetch('/rehab/my-condition', {
     method: 'PUT',
-    headers: {
-      ...authHeaders(),
-      'Content-Type': 'application/json',
-    },
     body: JSON.stringify({
       condition_id: conditionId,
       injury_details: injuryDetails,
       recovery_stage: recoveryStage,
     }),
   })
-  if (!res.ok) throw new Error('Failed to set rehab condition')
-  return await res.json()
+}
+
+export async function getRehabExercises() {
+  return apiFetch('/rehab/exercises')
+}
+
+// ── Rehab Plans ──────────────────────────────────────────────────────────────
+
+export async function getMyRehabPlans() {
+  return apiFetch('/rehab/plans')
+}
+
+export async function createRehabPlan(data) {
+  return apiFetch('/rehab/plans', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+}
+
+export async function getRehabPlan(planId) {
+  return apiFetch(`/rehab/plans/${planId}`)
+}
+
+export async function updateRehabPlan(planId, data) {
+  return apiFetch(`/rehab/plans/${planId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  })
+}
+
+export async function deleteRehabPlan(planId) {
+  return apiFetch(`/rehab/plans/${planId}`, {
+    method: 'DELETE',
+  })
+}
+
+// ── Routines ─────────────────────────────────────────────────────────────────
+
+export async function createRehabRoutine(planId, data) {
+  return apiFetch(`/rehab/plans/${planId}/routines`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+}
+
+export async function updateRehabRoutine(routineId, data) {
+  return apiFetch(`/rehab/routines/${routineId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  })
+}
+
+export async function deleteRehabRoutine(routineId) {
+  return apiFetch(`/rehab/routines/${routineId}`, {
+    method: 'DELETE',
+  })
+}
+
+// ── Exercises in Routines ────────────────────────────────────────────────────
+
+export async function addExerciseToRehabRoutine(routineId, data) {
+  return apiFetch(`/rehab/routines/${routineId}/exercises`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+}
+
+export async function deleteRoutineExercise(entryId) {
+  return apiFetch(`/rehab/routines/exercises/${entryId}`, {
+    method: 'DELETE',
+  })
 }
