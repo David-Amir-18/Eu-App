@@ -16,6 +16,7 @@ import RehabPlanPage from './pages/RehabPlanPage.jsx'
 import CreatePlanPage from './pages/CreatePlanPage.jsx'
 import WorkoutsPage from './pages/WorkoutsPage.jsx'
 import AdminHub from './pages/AdminHub.jsx'
+import Help from './pages/Help.jsx'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from './context/AuthContext.jsx'
 
@@ -52,6 +53,7 @@ function App() {
           <Route path="/plans/rehab/:id" element={<RehabPlanPage />} />
           <Route path="/plans/diet/:id" element={<MealPlanPage />} />
           <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/help" element={<Help />} />
           <Route 
             path="/admin" 
             element={

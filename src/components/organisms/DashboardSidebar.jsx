@@ -159,8 +159,6 @@ export function DashboardSidebar() {
     { to: '/workouts',  label: 'Workouts',  icon: <IconWorkouts />, end: false },
     { to: '/plans',     label: 'Plans',     icon: <IconPlans />,    end: false },
     { to: '/profile',   label: 'Account',   icon: <IconProfile />,  end: false },
-    { to: '/notifications', label: 'Notifications', icon: <IconNotifications />, end: false },
-    { to: '/settings',  label: 'Settings',  icon: <IconSettings />, end: false },
     { to: '/help',      label: 'Help',      icon: <IconHelp />,     end: false },
   ]
 
