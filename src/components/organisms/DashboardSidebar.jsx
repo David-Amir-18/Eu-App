@@ -32,6 +32,14 @@ function IconWorkouts() {
     </svg>
   )
 }
+function IconRehab() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 4v16m-8-8h16M8 4h8a4 4 0 0 1 4 4v8a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V8a4 4 0 0 1 4-4z" />
+    </svg>
+  )
+}
 function IconProfile() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none"
@@ -158,6 +166,7 @@ export function DashboardSidebar() {
     { to: '/dashboard', label: 'Dashboard', icon: <IconDashboard />, end: true },
     { to: '/meals',     label: 'Meals',     icon: <IconMeals />,    end: false },
     { to: '/workouts',  label: 'Workouts',  icon: <IconWorkouts />, end: false },
+    { to: '/rehab',     label: 'Rehab',     icon: <IconRehab />,    end: false },
     { to: '/plans',     label: 'Plans',     icon: <IconPlans />,    end: false },
     { to: '/profile',   label: 'Account',   icon: <IconProfile />,  end: false },
     { to: '/help',      label: 'Help',      icon: <IconHelp />,     end: false },

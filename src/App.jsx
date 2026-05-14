@@ -15,12 +15,15 @@ import MealsPage from './pages/MealsPage.jsx'
 import RehabPlanPage from './pages/RehabPlanPage.jsx'
 import CreatePlanPage from './pages/CreatePlanPage.jsx'
 import WorkoutsPage from './pages/WorkoutsPage.jsx'
-import { AuthProvider } from './context/AuthContext.jsx' 
+import RehabPage from './pages/RehabPage.jsx'
+import { AuthProvider } from './context/AuthContext.jsx'
 import ProtectedRoute from './protectedRoutes/ProtectedRoutes.jsx'
 import Help from './pages/Help.jsx'
 import AdminHub from './pages/AdminHub.jsx'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from './context/AuthContext.jsx'
+
+
 
 function App() {
   return (
@@ -49,6 +52,7 @@ function App() {
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/meals" element={<MealsPage />} />
               <Route path="/workouts" element={<WorkoutsPage />} />
+              <Route path="/rehab" element={<RehabPage />} />
               <Route path="/plans" element={<PlansPage />} />
               <Route path="/plans/create" element={<CreatePlanPage />} />
               <Route path="/plans/workout/:id" element={<WorkoutPlanPage />} />
@@ -57,6 +61,14 @@ function App() {
               <Route path="/profile" element={<ProfilePage />} />
               <Route path="/onboarding" element={<OnboardingPage />} />
               <Route path="/help" element={<Help />} />
+              <Route
+                path="/admin"
+                element={
+                  <AdminRouteGuard>
+                    <AdminHub />
+                  </AdminRouteGuard>
+                }
+              />
             </Route>
           </Route>
 

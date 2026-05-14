@@ -161,15 +161,15 @@ export default function Help() {
               </div>
             </Link>
 
-            <div className="bg-white border border-border-primary p-6 rounded-2xl flex flex-col gap-4 shadow-xs opacity-80 cursor-default">
-              <div className="w-12 h-12 rounded-xl bg-rehab-prim-100 flex items-center justify-center">
+            <Link to="/rehab" className="bg-white border border-border-primary p-6 rounded-2xl flex flex-col gap-4 shadow-xs hover:shadow-md hover:border-neutral-300 transition-all cursor-pointer group text-left">
+              <div className="w-12 h-12 rounded-xl bg-rehab-prim-100 flex items-center justify-center group-hover:bg-rehab-prim-200 transition-colors">
                 <IconBook className="w-6 h-6 text-rehab-prim" />
               </div>
               <div>
                 <h3 className="text-body-md font-bold text-text-headings mb-1">Rehab Protocols</h3>
                 <p className="text-body-sm text-text-body">Access targeted physiotherapeutic regimes, restorative exercises, and injury prevention limits.</p>
               </div>
-            </div>
+            </Link>
 
             <Link to="/profile" className="bg-white border border-border-primary p-6 rounded-2xl flex flex-col gap-4 shadow-xs hover:shadow-md hover:border-neutral-300 transition-all cursor-pointer group text-left">
               <div className="w-12 h-12 rounded-xl bg-primary-100 flex items-center justify-center group-hover:bg-primary-200 transition-colors">

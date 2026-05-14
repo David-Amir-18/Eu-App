@@ -9,6 +9,8 @@ async function apiFetch(endpoint, options = {}) {
   const token = localStorage.getItem('token')
   const headers = {
     'Content-Type': 'application/json',
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Pragma': 'no-cache',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...(options.headers || {}),
   }
@@ -28,7 +30,7 @@ async function apiFetch(endpoint, options = {}) {
 
   // Handle 204 No Content
   if (response.status === 204) return null
-  
+
   return response.json()
 }
 
@@ -38,10 +40,14 @@ export async function getConditions() {
   return apiFetch('/rehab/conditions')
 }
 
-export async function setMyCondition(data) {
+export async function setMyCondition(conditionId, injuryDetails = null, recoveryStage = null) {
   return apiFetch('/rehab/my-condition', {
     method: 'PUT',
-    body: JSON.stringify(data),
+    body: JSON.stringify({
+      condition_id: conditionId,
+      injury_details: injuryDetails,
+      recovery_stage: recoveryStage,
+    }),
   })
 }
 
