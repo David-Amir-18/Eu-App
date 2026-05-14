@@ -148,6 +148,7 @@ function StatRow({ label, value, max }) {
 
 // ── Nav items ──────────────────────────────────────────────────────────────────
 export function DashboardSidebar() {
+  const { isAdmin } = useAuth()
   const [isOpen, setIsOpen] = useState(false)
   const [profile, setProfile] = useState(null)
   const userId = localStorage.getItem('user_id')
