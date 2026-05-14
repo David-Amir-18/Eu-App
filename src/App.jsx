@@ -17,7 +17,10 @@ import CreatePlanPage from './pages/CreatePlanPage.jsx'
 import WorkoutsPage from './pages/WorkoutsPage.jsx'
 import { AuthProvider } from './context/AuthContext.jsx' 
 import ProtectedRoute from './protectedRoutes/ProtectedRoutes.jsx'
-
+import Help from './pages/Help.jsx'
+import AdminHub from './pages/AdminHub.jsx'
+import { Navigate } from 'react-router-dom'
+import { useAuth } from './context/AuthContext.jsx'
 
 function App() {
   return (
@@ -31,7 +34,15 @@ function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/contact" element={<Contact />} />
-
+          <Route path="/help" element={<Help />} />
+          <Route 
+            path="/admin" 
+            element={
+              <AdminRouteGuard>
+                <AdminHub />
+              </AdminRouteGuard>
+            } 
+          />
           {/* Protected Routes */}
           <Route element={<ProtectedRoute />}>
             <Route element={<DashboardLayout />}>
@@ -45,6 +56,7 @@ function App() {
               <Route path="/plans/diet/:id" element={<MealPlanPage />} />
               <Route path="/profile" element={<ProfilePage />} />
               <Route path="/onboarding" element={<OnboardingPage />} />
+              <Route path="/help" element={<Help />} />
             </Route>
           </Route>
 
@@ -54,3 +66,14 @@ function App() {
   )
 }
 export default App
+function AdminRouteGuard({ children }) {
+  const { isAdmin, loading } = useAuth()
+  
+  if (loading) return <div className="p-12 text-center font-medium text-text-disabled">Authorizing access...</div>
+  
+  if (!isAdmin) {
+    return <Navigate to="/dashboard" replace />
+  }
+  
+  return children
+}
