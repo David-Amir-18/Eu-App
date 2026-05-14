@@ -20,7 +20,7 @@ const TYPE_CONFIG = {
     gradient:      'var(--gradient-workout)',
     image:         'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&w=400&q=80',
     badge:         'bg-workout-prim-100 text-workout-prim',
-    detail:        'bg-workout-sec',
+    detail:        'bg-workout-prim',
     btnPrimary:    'workout-primary',
     btnOutline:    'workout-outline',
   },
@@ -49,17 +49,204 @@ function ProgressBar({ value, max, color = 'bg-surface-action' }) {
 }
 
 // ── Closest item preview ───────────────────────────────────────────────────────
-function ClosestPreview({ label }) {
-  return (
-    <div className="flex flex-col items-center gap-1 min-w-[4.5rem]">
-      <p className="text-body-sm text-text-disabled font-semibold text-center leading-tight">{label}</p>
-      <div className="w-full h-10 rounded-md bg-neutral-100" />
-      <div className="w-6 h-6 rounded-md border border-border-primary flex items-center justify-center text-text-disabled">
-        <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none"
-          stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <polyline points="20 6 9 17 4 12" />
-        </svg>
+function ClosestPreview({ planId, planType, slots, routines, planImage, onToggleSlotTaken, onToggleExerciseDone, fallbackLabel }) {
+  if (planType === 'Workout') {
+    const todayStr = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date().getDay()]
+    const todayRoutine = routines?.find(r => (r.assignedDays || []).includes(todayStr))
+
+    if (!todayRoutine) {
+      return (
+        <div className="flex flex-col items-center justify-center w-full h-full text-center px-4 min-w-[14rem]">
+          <div className="w-12 h-12 rounded-full bg-workout-prim/10 flex items-center justify-center mb-2">
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-workout-prim" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M21 5c0 1.66-4 3-9 3S3 6.66 3 5s4-3 9-3 9 1.34 9 3z"/></svg>
+          </div>
+          <p className="text-body-md font-bold text-text-headings">Rest Day</p>
+          <p className="text-body-sm text-text-disabled">Time to recover and recharge.</p>
+        </div>
+      )
+    }
+
+    if (!todayRoutine.exercises || todayRoutine.exercises.length === 0) {
+      return (
+        <div className="flex flex-col items-center justify-center w-full h-full text-center px-4 min-w-[14rem]">
+          <p className="text-body-md font-bold text-text-headings">No Exercises</p>
+          <p className="text-body-sm text-text-disabled">This routine has no exercises yet.</p>
+        </div>
+      )
+    }
+
+    return (
+      <div className="flex gap-3 min-w-[8rem] overflow-x-auto pb-2 scrollbar-hide flex-1">
+        {todayRoutine.exercises.map((ex, idx) => {
+          const title = typeof ex === 'string' ? ex : ex.title
+          const taken = typeof ex === 'object' ? !!ex.taken : false
+          const imageUrl = (typeof ex === 'object' && ex.thumbnail_url) ? ex.thumbnail_url : planImage
+          
+          return (
+            <div key={idx} className="relative w-36 h-36 rounded-xl overflow-hidden shrink-0 border border-border-primary group">
+              <img src={imageUrl} alt={title} className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+              
+              {taken && (
+                <div className="absolute inset-0 bg-workout-prim/60 flex items-center justify-center pb-8">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-12 h-12 text-neutral-white opacity-90" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                </div>
+              )}
+
+              <div className="absolute inset-0 bg-gradient-to-t from-neutral-black/90 via-neutral-black/40 to-neutral-black/10" />
+
+              <div className="absolute inset-0 p-3 flex flex-col justify-end">
+                <p className="text-[10px] font-bold text-neutral-white/90 uppercase leading-none mb-1 truncate drop-shadow-sm">Exercise {idx + 1}</p>
+                <p className="text-body-sm font-semibold text-neutral-white leading-tight truncate mb-2 drop-shadow-sm" title={title}>
+                  {title}
+                </p>
+                {taken ? (
+                  <Button 
+                    variant="workout-primary" size="sm"
+                    onClick={(e) => { e.stopPropagation(); e.preventDefault(); onToggleExerciseDone?.(planId, todayRoutine.id, idx); }}
+                    className="w-full py-1.5 shadow-lg border border-white/20 bg-workout-prim/80 text-neutral-white hover:bg-workout-prim"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    Done
+                  </Button>
+                ) : (
+                  <Button 
+                    variant="workout-primary" size="sm"
+                    onClick={(e) => { e.stopPropagation(); e.preventDefault(); onToggleExerciseDone?.(planId, todayRoutine.id, idx); }}
+                    className="w-full py-1.5 shadow-lg border border-white/10"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    Mark Done
+                  </Button>
+                )}
+              </div>
+            </div>
+          )
+        })}
       </div>
+    )
+  }
+
+  if (planType !== 'Diet' || !slots || slots.length === 0) {
+    return (
+      <div className="flex flex-col items-center gap-1 min-w-[4.5rem]">
+        <p className="text-body-sm text-text-disabled font-semibold text-center leading-tight">{fallbackLabel}</p>
+        <div className="w-full h-10 rounded-md bg-neutral-100" />
+        <div className="w-6 h-6 rounded-md border border-border-primary flex items-center justify-center text-text-disabled">
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+        </div>
+      </div>
+    )
+  }
+
+  const parseTimeToDate = (timeStr) => {
+    if (!timeStr) return new Date(0)
+    const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i)
+    if (!match) return new Date(0)
+    let [, hours, minutes, modifier] = match
+    hours = parseInt(hours, 10)
+    if (hours === 12) {
+      hours = modifier.toUpperCase() === 'PM' ? 12 : 0
+    } else if (modifier.toUpperCase() === 'PM') {
+      hours += 12
+    }
+    const d = new Date()
+    d.setHours(hours, parseInt(minutes, 10), 0, 0)
+    return d
+  }
+
+  const now = new Date()
+  
+  // Sort all slots by time
+  const sortedSlots = [...slots].sort((a, b) => parseTimeToDate(a.time) - parseTimeToDate(b.time))
+  
+  // Find bounding meals
+  let pastMeal = null
+  let futureMeal = null
+
+  for (let i = 0; i < sortedSlots.length; i++) {
+    if (parseTimeToDate(sortedSlots[i].time) <= now) {
+      pastMeal = sortedSlots[i]
+    } else {
+      futureMeal = sortedSlots[i]
+      break
+    }
+  }
+
+  const displaySlots = []
+  if (pastMeal) displaySlots.push(pastMeal)
+  if (futureMeal) displaySlots.push(futureMeal)
+  
+  if (displaySlots.length === 1 && sortedSlots.length >= 2) {
+    if (!pastMeal && sortedSlots[1]) displaySlots.push(sortedSlots[1])
+    else if (!futureMeal && sortedSlots.length > 1) {
+      const earlier = sortedSlots.find(s => s.id !== pastMeal.id)
+      if (earlier) displaySlots.unshift(earlier)
+    }
+  }
+
+  return (
+    <div className="flex gap-3 min-w-[8rem]">
+      {displaySlots.map(slot => {
+        const meal = slot.meals?.find(m => m.id === slot.selectedMealId) || slot.meals?.[0]
+        const imageUrl = meal?.image || meal?.image_url || planImage
+
+        return (
+          <div key={slot.id} className="relative w-36 h-36 rounded-xl overflow-hidden shrink-0 border border-border-primary group">
+            {/* Background Image */}
+            <img src={imageUrl} alt={meal?.name || 'Meal'} className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+            
+            {/* Taken Overlay */}
+            {slot.taken && (
+              <div className="absolute inset-0 bg-meals-prim/60 flex items-center justify-center pb-8">
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-12 h-12 text-neutral-white opacity-90" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              </div>
+            )}
+
+            {/* Gradient Overlay */}
+            <div className="absolute inset-0 bg-gradient-to-t from-neutral-black/90 via-neutral-black/40 to-neutral-black/10" />
+
+            {/* Content overlay */}
+            <div className="absolute inset-0 p-3 flex flex-col justify-end">
+              <p className="text-[10px] font-bold text-neutral-white/90 uppercase leading-none mb-1 truncate drop-shadow-sm">{slot.label} • {slot.time}</p>
+              <p className="text-body-sm font-semibold text-neutral-white leading-tight truncate mb-2 drop-shadow-sm" title={meal?.name || 'No meal'}>
+                {meal?.name || 'No meal'}
+              </p>
+              {slot.taken ? (
+                <Button 
+                  variant="meals-primary"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    e.preventDefault()
+                    onToggleSlotTaken?.(planId, slot.id)
+                  }}
+                  className="w-full py-1.5 shadow-lg border border-white/20 bg-meals-prim/80 text-neutral-white hover:bg-meals-prim"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  Taken
+                </Button>
+              ) : (
+                <Button 
+                  variant="meals-primary"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    e.preventDefault()
+                    onToggleSlotTaken?.(planId, slot.id)
+                  }}
+                  className="w-full py-1.5 shadow-lg border border-white/10"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  Mark Taken
+                </Button>
+              )}
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -79,6 +266,10 @@ export function PlanCard({
   ctaLabel = 'Log a meal',
   image,
   status,
+  slots,
+  routines,
+  onToggleSlotTaken,
+  onToggleExerciseDone,
   // Preserved raw fields
   rawType,
   rawLevel,
@@ -103,14 +294,14 @@ export function PlanCard({
 
   return (
     <div className={cn(
-      "flex border border-border-primary rounded-xl overflow-hidden bg-surface-primary hover:shadow-md transition-all duration-300",
+      "flex flex-col xl:flex-row border border-border-primary rounded-xl overflow-hidden bg-surface-primary hover:shadow-md transition-all duration-300",
       isDraft && "bg-neutral-100/60 border-dashed"
     )}>
 
       {/* Left panel — fixed width, image background */}
       <div
         className={cn(
-          "relative shrink-0 w-32 flex items-end justify-start p-3 overflow-hidden transition-opacity duration-300",
+          "relative shrink-0 w-full h-40 xl:w-40 xl:h-auto flex items-end justify-start p-4 overflow-hidden transition-opacity duration-300",
           isDraft && "opacity-50 saturate-50"
         )}
         style={{
@@ -141,11 +332,19 @@ export function PlanCard({
         {/* Progress */}
         <div className="flex flex-col gap-1">
           <ProgressBar value={progress} max={progressMax} color={cfg.progress} />
-          {sessions !== undefined && (
+          {planType === 'Diet' && slots ? (
+            <p className="text-body-sm text-text-disabled">
+              {progress} / {progressMax} meals taken today
+            </p>
+          ) : planType === 'Workout' && routines ? (
+            <p className="text-body-sm text-text-disabled">
+              {progress} / {progressMax} exercises completed today
+            </p>
+          ) : sessions !== undefined ? (
             <p className="text-body-sm text-text-disabled">
               {sessions} / {sessionsMax} {planType === 'Diet' ? 'days on track' : 'sessions completed'}
             </p>
-          )}
+          ) : null}
         </div>
 
         {/* CTAs */}
@@ -222,8 +421,17 @@ export function PlanCard({
       </div>
 
       {/* Closest preview column */}
-      <div className="border-l border-border-primary px-4 py-4 flex items-center">
-        <ClosestPreview label={closestLabel} />
+      <div className="border-t xl:border-t-0 xl:border-l border-border-primary px-4 py-4 flex items-center overflow-x-auto w-full xl:w-auto xl:min-w-[22rem]">
+        <ClosestPreview 
+          planId={id}  
+          planType={planType} 
+          slots={slots} 
+          routines={routines}
+          planImage={cfg.image}
+          onToggleSlotTaken={onToggleSlotTaken} 
+          onToggleExerciseDone={onToggleExerciseDone}
+          fallbackLabel={closestLabel} 
+        />
       </div>
     </div>
   )

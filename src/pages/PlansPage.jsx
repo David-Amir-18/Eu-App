@@ -1,54 +1,9 @@
-import { useState } from 'react'
+import { useState , useEffect} from 'react'
 import { Link } from 'react-router-dom'
 import { PlanCard } from '../components/molecules/PlanCard.jsx'
 import { Button } from '../components/atoms/Button.jsx'
 import { cn } from '../components/utils.js'
 
-// ── Mock plans ─────────────────────────────────────────────────────────────────
-const ALL_PLANS = [
-  {
-    id: 'diabetes-friendly',
-    name: 'Diabetes\nfriendly',
-    defaultTab: 'Diet',
-    status: 'active',
-    dateRange: 'Jan 01, 2026 → Feb 01, 2026 · 4 weeks',
-    detail: 'Daily calorie target: kcal / day · Goal: Lose Weight',
-    detailColor: 'bg-success-500',
-    progress: 10,
-    progressMax: 30,
-    sessions: 10,
-    sessionsMax: 30,
-    ctaLabel: 'Log a meal',
-  },
-  {
-    id: 'full-body',
-    name: 'Full Body',
-    defaultTab: 'Workout',
-    status: 'active',
-    dateRange: 'Jan 01, 2026 → Feb 15, 2026 · 6 weeks',
-    detail: 'Frequency: 4 days / week · Level: Beginner',
-    detailColor: 'bg-error-400',
-    progress: 12,
-    progressMax: 24,
-    sessions: 12,
-    sessionsMax: 24,
-    ctaLabel: 'Log a workout',
-  },
-  {
-    id: 'acl-injury',
-    name: 'ACL Injury',
-    defaultTab: 'Rehab',
-    status: 'completed',
-    dateRange: 'Nov 01, 2025 → Dec 15, 2025 · 6 weeks',
-    detail: 'Frequency: 4 days / week · Level: Beginner',
-    detailColor: 'bg-secondary-500',
-    progress: 24,
-    progressMax: 24,
-    sessions: 24,
-    sessionsMax: 24,
-    ctaLabel: 'View Results',
-  }
-]
 
 const TABS = ['All', 'Active', 'Completed', 'Drafts']
 
@@ -58,18 +13,18 @@ export default function PlansPage() {
   // Load custom plans from localStorage and combine with ALL_PLANS.
   // Auto-purge stale workout plans that pre-date backend integration (no backendId).
   const [plans, setPlans] = useState(() => {
-    try {
-      const stored = localStorage.getItem('user_plans')
-      const parsed = stored ? JSON.parse(stored) : []
+        try {
+            const stored = localStorage.getItem('user_plans')
+            const parsed = stored ? JSON.parse(stored) : []
       // Remove any Workout plans that don't have a real backend UUID (backendId)
       const cleaned = parsed.filter(p => !(p.defaultTab === 'Workout' && !p.backendId))
       if (cleaned.length !== parsed.length) {
         localStorage.setItem('user_plans', JSON.stringify(cleaned))
       }
-      return [...cleaned, ...ALL_PLANS]
+      return [...cleaned]
     } catch {
       return ALL_PLANS
-    }
+      }
   })
 
   const [planToDelete, setPlanToDelete] = useState(null)
@@ -85,11 +40,77 @@ export default function PlansPage() {
       const parsed = stored ? JSON.parse(stored) : []
       const updated = parsed.filter(plan => plan.id !== planToDelete)
       localStorage.setItem('user_plans', JSON.stringify(updated))
-      setPlans([...updated, ...ALL_PLANS])
+      setPlans([...updated, ...(typeof ALL_PLANS !== 'undefined' ? ALL_PLANS : [])])
     } catch (e) {
       console.error(e)
     } finally {
       setPlanToDelete(null)
+    }
+  }
+
+  const handleToggleSlotTaken = (planId, slotId) => {
+    try {
+      const updatedPlans = plans.map(p => {
+        if (p.id === planId && p.slots) {
+          const newSlots = p.slots.map(s => s.id === slotId ? { ...s, taken: !s.taken } : s)
+          return { ...p, slots: newSlots }
+        }
+        return p
+      })
+      setPlans(updatedPlans)
+      
+      const stored = localStorage.getItem('user_plans')
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        const updatedStored = parsed.map(p => {
+          if (p.id === planId && p.slots) {
+            const newSlots = p.slots.map(s => s.id === slotId ? { ...s, taken: !s.taken } : s)
+            return { ...p, slots: newSlots }
+          }
+          return p
+        })
+        localStorage.setItem('user_plans', JSON.stringify(updatedStored))
+      }
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  const handleToggleExerciseDone = (planId, routineId, exerciseIndex) => {
+    try {
+      const updatePlan = (p) => {
+        if (p.id === planId && p.routines) {
+          const newRoutines = p.routines.map(r => {
+            if (r.id === routineId && r.exercises) {
+              const newExercises = r.exercises.map((ex, idx) => {
+                if (idx === exerciseIndex) {
+                  // handle if ex is string or object
+                  if (typeof ex === 'string') {
+                    return { title: ex, taken: true }
+                  }
+                  return { ...ex, taken: !ex.taken }
+                }
+                return ex
+              })
+              return { ...r, exercises: newExercises }
+            }
+            return r
+          }
+          )
+          return { ...p, routines: newRoutines }
+        }
+        return p
+      }
+
+      setPlans(plans.map(updatePlan))
+      
+      const stored = localStorage.getItem('user_plans')
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        localStorage.setItem('user_plans', JSON.stringify(parsed.map(updatePlan)))
+      }
+    } catch (e) {
+      console.error(e)
     }
   }
 
@@ -139,9 +160,32 @@ export default function PlansPage() {
         <section aria-label="Plans List" className="flex flex-col gap-6">
           <div className="flex flex-col gap-5">
             {filteredPlans.length > 0 ? (
-              filteredPlans.map(plan => (
-                <PlanCard key={plan.id} {...plan} onDelete={handleDeletePlan} />
-              ))
+              filteredPlans.map(plan => {
+                let progress = plan.progress
+                let progressMax = plan.progressMax
+                if (plan.defaultTab === 'Diet' && plan.slots) {
+                  progressMax = plan.slots.length
+                  progress = plan.slots.filter(s => s.taken).length
+                } else if (plan.defaultTab === 'Workout' && plan.routines) {
+                  const todayStr = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date().getDay()]
+                  const todayRoutine = plan.routines.find(r => (r.assignedDays || []).includes(todayStr))
+                  if (todayRoutine && todayRoutine.exercises) {
+                    progressMax = todayRoutine.exercises.length
+                    progress = todayRoutine.exercises.filter(ex => typeof ex === 'object' && ex.taken).length
+                  }
+                }
+                return (
+                  <PlanCard 
+                    key={plan.id} 
+                    {...plan} 
+                    progress={progress}
+                    progressMax={progressMax}
+                    onDelete={handleDeletePlan} 
+                    onToggleSlotTaken={handleToggleSlotTaken}
+                    onToggleExerciseDone={handleToggleExerciseDone}
+                  />
+                )
+              })
             ) : (
               <div className="py-12 flex flex-col items-center justify-center text-center border border-border-primary border-dashed rounded-xl bg-surface-primary opacity-70">
                 <p className="text-body-lg font-semibold text-text-disabled mb-2">No {activeTab.toLowerCase()} plans found.</p>

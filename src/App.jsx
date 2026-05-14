@@ -15,62 +15,42 @@ import MealsPage from './pages/MealsPage.jsx'
 import RehabPlanPage from './pages/RehabPlanPage.jsx'
 import CreatePlanPage from './pages/CreatePlanPage.jsx'
 import WorkoutsPage from './pages/WorkoutsPage.jsx'
-import AdminHub from './pages/AdminHub.jsx'
-import Help from './pages/Help.jsx'
-import { Navigate } from 'react-router-dom'
-import { useAuth } from './context/AuthContext.jsx'
-
-function AdminRouteGuard({ children }) {
-  const { isAdmin, loading } = useAuth()
-  
-  if (loading) return <div className="p-12 text-center font-medium text-text-disabled">Authorizing access...</div>
-  
-  if (!isAdmin) {
-    return <Navigate to="/dashboard" replace />
-  }
-  
-  return children
-}
-
+import { AuthProvider } from './context/AuthContext.jsx' 
+import ProtectedRoute from './protectedRoutes/ProtectedRoutes.jsx'
 
 
 function App() {
   return (
-    <BrowserRouter>
-      <Routes>
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          {/* Public Routes */}
+          <Route element={<AppLayout />}>
+            <Route index element={<Home />} />
+          </Route>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/contact" element={<Contact />} />
 
-        <Route element={<AppLayout />}>
-          <Route index element={<Home />} />
-        </Route>
+          {/* Protected Routes */}
+          <Route element={<ProtectedRoute />}>
+            <Route element={<DashboardLayout />}>
+              <Route path="/dashboard" element={<DashboardPage />} />
+              <Route path="/meals" element={<MealsPage />} />
+              <Route path="/workouts" element={<WorkoutsPage />} />
+              <Route path="/plans" element={<PlansPage />} />
+              <Route path="/plans/create" element={<CreatePlanPage />} />
+              <Route path="/plans/workout/:id" element={<WorkoutPlanPage />} />
+              <Route path="/plans/rehab/:id" element={<RehabPlanPage />} />
+              <Route path="/plans/diet/:id" element={<MealPlanPage />} />
+              <Route path="/profile" element={<ProfilePage />} />
+              <Route path="/onboarding" element={<OnboardingPage />} />
+            </Route>
+          </Route>
 
-        <Route element={<DashboardLayout />}>
-          <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/meals" element={<MealsPage />} />
-          <Route path="/workouts" element={<WorkoutsPage />} />
-          <Route path="/plans" element={<PlansPage />} />
-          <Route path="/plans/create" element={<CreatePlanPage />} />
-          <Route path="/plans/workout/:id" element={<WorkoutPlanPage />} />
-          <Route path="/plans/rehab/:id" element={<RehabPlanPage />} />
-          <Route path="/plans/diet/:id" element={<MealPlanPage />} />
-          <Route path="/profile" element={<ProfilePage />} />
-          <Route path="/help" element={<Help />} />
-          <Route 
-            path="/admin" 
-            element={
-              <AdminRouteGuard>
-                <AdminHub />
-              </AdminRouteGuard>
-            } 
-          />
-        </Route>
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
-        <Route path="/onboarding" element={<OnboardingPage />} />
-        <Route path="/contact" element={<Contact />} />
-
-      </Routes>
-    </BrowserRouter>
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   )
 }
-
 export default App

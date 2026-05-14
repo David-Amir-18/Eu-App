@@ -148,7 +148,7 @@ function StatRow({ label, value, max }) {
 
 // ── Nav items ──────────────────────────────────────────────────────────────────
 export function DashboardSidebar() {
-  const { isAdmin } = useAuth()
+  const [isOpen, setIsOpen] = useState(false)
   const [profile, setProfile] = useState(null)
   const userId = localStorage.getItem('user_id')
   const username = localStorage.getItem('username') || 'User'
@@ -178,22 +178,60 @@ export function DashboardSidebar() {
   const calorieTarget = profile?.DailyCalorieTarget ?? 2000
 
   return (
-    <aside className="fixed top-0 left-0 w-60 h-screen bg-surface-primary border-r border-border-primary flex flex-col overflow-y-auto z-40">
-
-      {/* Logo */}
-      <div className="flex items-center gap-3 px-5 py-5 border-b border-border-primary">
-        <div className="w-9 h-9 rounded-round bg-surface-action flex items-center justify-center shrink-0">
-          <span className="text-body-sm font-bold text-neutral-white">EU</span>
+    <>
+      {/* Mobile Top Navigation Bar */}
+      <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-surface-primary border-b border-border-primary z-30 flex items-center justify-between px-4">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-round bg-surface-action flex items-center justify-center shrink-0">
+            <span className="text-body-xs font-bold text-neutral-white">EU</span>
+          </div>
+          <span className="text-heading-h6 font-bold text-text-headings tracking-tight">EU Health</span>
         </div>
-        <span className="text-heading-h6 font-bold text-text-headings tracking-tight">EU Health</span>
+        <button onClick={() => setIsOpen(true)} className="p-2 text-text-body hover:bg-neutral-100 rounded-lg transition-colors">
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
       </div>
 
+      {/* Mobile Backdrop Overlay */}
+      {isOpen && (
+        <div 
+          className="fixed inset-0 bg-neutral-black/50 z-40 md:hidden backdrop-blur-sm transition-opacity"
+          onClick={() => setIsOpen(false)}
+        />
+      )}
+
+      {/* Sidebar Container */}
+      <aside className={cn(
+        "fixed top-0 left-0 w-60 h-screen bg-surface-primary border-r border-border-primary flex flex-col overflow-y-auto z-50 transition-transform duration-300 ease-in-out",
+        isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+      )}>
+
+        {/* Logo - Desktop only */}
+        <div className="hidden md:flex items-center gap-3 px-5 py-5 border-b border-border-primary shrink-0">
+          <div className="w-9 h-9 rounded-round bg-surface-action flex items-center justify-center shrink-0">
+            <span className="text-body-sm font-bold text-neutral-white">EU</span>
+          </div>
+          <span className="text-heading-h6 font-bold text-text-headings tracking-tight">EU Health</span>
+        </div>
+
+        {/* Mobile Drawer Header */}
+        <div className="md:hidden flex items-center justify-between px-5 py-4 border-b border-border-primary shrink-0">
+          <span className="text-heading-h6 font-bold text-text-headings">Menu</span>
+          <button onClick={() => setIsOpen(false)} className="p-2 text-text-disabled hover:bg-neutral-100 rounded-lg transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
       {/* Streaks */}
-      <div className="px-5 py-4 border-b border-border-primary flex flex-col gap-3">
+      {/* <div className="px-5 py-4 border-b border-border-primary flex flex-col gap-3">
         <p className="text-body-sm font-bold text-text-disabled uppercase tracking-widest">Statistics</p>
         <StreakBadge label="Meals Streak" count={streak} />
         <StreakBadge label="Workout Streak" count={streak} />
-      </div>
+      </div> */}
 
       {/* Quick stats */}
       <div className="px-5 py-4 border-b border-border-primary flex flex-col gap-3">
@@ -208,6 +246,7 @@ export function DashboardSidebar() {
             key={to}
             to={to}
             end={end}
+            onClick={() => setIsOpen(false)}
             className={({ isActive }) =>
               cn(
                 'flex items-center gap-3 px-3 py-2 rounded-lg text-body-md transition-colors',
@@ -243,5 +282,6 @@ export function DashboardSidebar() {
         </button>
       </div>
     </aside>
+    </>
   )
 }

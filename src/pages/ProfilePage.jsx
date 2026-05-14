@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { getUserMetrics, saveUserMetrics } from '../api/authService.js'
 import { cn } from '../components/utils.js'
+import { Menu } from '../components/molecules/Menu.jsx'
+
 
 // ── Icons ──────────────────────────────────────────────────────────────────────
 function IconEdit() {
@@ -82,41 +84,6 @@ function StatCard({ title, value, subtitle, icon, colorClass, bgClass }) {
   )
 }
 
-// ── Bar Chart ──────────────────────────────────────────────────────────────────
-function BarChart({ title, data, max = 4, labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] }) {
-  return (
-    <div className="bg-surface-page rounded-xl p-6 border border-border-primary shadow-sm flex flex-col">
-      <h3 className="text-heading-h6 font-bold text-text-headings mb-8">{title}</h3>
-      <div className="relative h-48 flex w-full ml-4">
-        {/* Y-axis labels and grid lines */}
-        <div className="absolute inset-0 flex flex-col justify-between pointer-events-none z-0">
-          {[...Array(max + 1)].map((_, i) => (
-            <div key={i} className="flex items-center w-full relative">
-              <span className="text-[11px] text-text-disabled w-6 text-right absolute -translate-y-1/2 -left-8">
-                {max - i}
-              </span>
-              <div className="w-full border-t border-neutral-100" />
-            </div>
-          ))}
-        </div>
-        
-        {/* Bars */}
-        <div className="flex-1 flex justify-between items-end px-2 z-10">
-          {data.map((val, i) => (
-            <div key={i} className="flex flex-col items-center gap-3 flex-1 group">
-              <div 
-                className="w-full max-w-[1.75rem] bg-neutral-200 rounded-full transition-all duration-1000 ease-out origin-bottom group-hover:bg-surface-action"
-                style={{ height: `${(val / max) * 100}%` }} 
-                title={`${val}`} 
-              />
-              <span className="text-[11px] text-text-disabled font-medium">{labels[i]}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  )
-}
 
 export default function ProfilePage() {
   const [profile, setProfile] = useState(null)
@@ -124,6 +91,7 @@ export default function ProfilePage() {
   const [isEditing, setIsEditing] = useState(false)
   const [editData, setEditData] = useState(null)
   const [saving, setSaving] = useState(false)
+
 
   const userId = localStorage.getItem('user_id')
   const username = localStorage.getItem('username') || 'User'
@@ -242,11 +210,6 @@ export default function ProfilePage() {
             <section aria-label="Statistics">
               <h2 className="text-heading-h5 font-bold text-text-headings mb-5">Your Statistics</h2>
               
-              {/* Charts Row */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-                <BarChart title="Workouts done" data={[3, 0, 0, 0, 4, 3, 4]} />
-                <BarChart title="Meals ate" data={[3, 4, 3, 4, 4, 3, 4]} />
-              </div>
 
               {/* Summary Cards */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">

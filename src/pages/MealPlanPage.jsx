@@ -2,66 +2,9 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { cn } from '../components/utils.js'
 import { Button } from '../components/atoms/Button.jsx'
+import { getMeal, getMeals, getFilterOptions } from '../api/mealsService.js'
 
-// ── Mock data ──────────────────────────────────────────────────────────────────
-const MOCK_PLAN = {
-  id: 'diabetes-friendly',
-  name: 'Diabetes Friendly',
-  image: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=1200&q=80',
-  condition: 'Diabetes',
-  calorieTarget: 1800,
-  startDate: 'Jan 01, 2026',
-  endDate: 'Feb 01, 2026',
-}
 
-const MOCK_SLOTS = [
-  {
-    id: 'breakfast',
-    label: 'Breakfast',
-    time: '7:00 AM',
-    meals: [
-      { id: 'm1', name: 'Oatmeal with Berries', calories: 320, protein: 12, carbs: 54, fat: 6, image: 'https://images.unsplash.com/photo-1517673400267-0251440c45dc?auto=format&fit=crop&w=400&q=80', warning: null },
-      { id: 'm2', name: 'Greek Yogurt Parfait', calories: 280, protein: 18, carbs: 38, fat: 5, image: 'https://images.unsplash.com/photo-1488477181946-6428a0291777?auto=format&fit=crop&w=400&q=80', warning: null },
-      { id: 'm3', name: 'Avocado Toast', calories: 350, protein: 10, carbs: 42, fat: 16, image: 'https://images.unsplash.com/photo-1541519227354-08fa5d50c820?auto=format&fit=crop&w=400&q=80', warning: null },
-    ],
-    selectedMealId: 'm1',
-    taken: false,
-  },
-  {
-    id: 'lunch',
-    label: 'Lunch',
-    time: '12:30 PM',
-    meals: [
-      { id: 'm4', name: 'Grilled Chicken Salad', calories: 420, protein: 38, carbs: 22, fat: 18, image: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=400&q=80', warning: null },
-      { id: 'm5', name: 'Quinoa Bowl', calories: 480, protein: 22, carbs: 68, fat: 12, image: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=400&q=80', warning: null },
-      { id: 'm6', name: 'White Rice & Curry', calories: 620, protein: 24, carbs: 95, fat: 14, image: 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?auto=format&fit=crop&w=400&q=80', warning: '⚠️ High glycemic index — not recommended for diabetes' },
-    ],
-    selectedMealId: 'm4',
-    taken: false,
-  },
-  {
-    id: 'snack',
-    label: 'Snack',
-    time: '3:30 PM',
-    meals: [
-      { id: 'm7', name: 'Mixed Nuts', calories: 180, protein: 6, carbs: 8, fat: 16, image: 'https://images.unsplash.com/photo-1599599810769-bcde5a160d32?auto=format&fit=crop&w=400&q=80', warning: null },
-      { id: 'm8', name: 'Apple with Peanut Butter', calories: 210, protein: 5, carbs: 28, fat: 10, image: 'https://images.unsplash.com/photo-1568702846914-96b305d2aaeb?auto=format&fit=crop&w=400&q=80', warning: null },
-    ],
-    selectedMealId: 'm7',
-    taken: false,
-  },
-  {
-    id: 'dinner',
-    label: 'Dinner',
-    time: '7:00 PM',
-    meals: [
-      { id: 'm9', name: 'Baked Salmon & Veggies', calories: 520, protein: 42, carbs: 28, fat: 22, image: 'https://images.unsplash.com/photo-1467003909585-2f8a72700288?auto=format&fit=crop&w=400&q=80', warning: null },
-      { id: 'm10', name: 'Lentil Soup', calories: 380, protein: 20, carbs: 58, fat: 6, image: 'https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=400&q=80', warning: null },
-    ],
-    selectedMealId: 'm9',
-    taken: false,
-  },
-]
 
 const WEEK_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const WEEK_CALORIES = [1650, 1820, 1780, 0, 1900, 1720, 1800]
@@ -86,21 +29,6 @@ function Modal({ open, onClose, title, children, size = 'md' }) {
   )
 }
 
-// ── Meal library (mock) ────────────────────────────────────────────────────────
-const MEAL_LIBRARY = [
-  { id: 'm1',  name: 'Oatmeal with Berries',      calories: 320, image: 'https://images.unsplash.com/photo-1517673400267-0251440c45dc?auto=format&fit=crop&w=400&q=80' },
-  { id: 'm2',  name: 'Greek Yogurt Parfait',       calories: 280, image: 'https://images.unsplash.com/photo-1488477181946-6428a0291777?auto=format&fit=crop&w=400&q=80' },
-  { id: 'm3',  name: 'Avocado Toast',              calories: 350, image: 'https://images.unsplash.com/photo-1541519227354-08fa5d50c820?auto=format&fit=crop&w=400&q=80' },
-  { id: 'm4',  name: 'Grilled Chicken Salad',      calories: 420, image: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=400&q=80' },
-  { id: 'm5',  name: 'Quinoa Bowl',                calories: 480, image: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=400&q=80' },
-  { id: 'm6',  name: 'White Rice & Curry',         calories: 620, image: 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?auto=format&fit=crop&w=400&q=80' },
-  { id: 'm7',  name: 'Mixed Nuts',                 calories: 180, image: 'https://images.unsplash.com/photo-1599599810769-bcde5a160d32?auto=format&fit=crop&w=400&q=80' },
-  { id: 'm8',  name: 'Apple with Peanut Butter',   calories: 210, image: 'https://images.unsplash.com/photo-1568702846914-96b305d2aaeb?auto=format&fit=crop&w=400&q=80' },
-  { id: 'm9',  name: 'Baked Salmon & Veggies',     calories: 520, image: 'https://images.unsplash.com/photo-1467003909585-2f8a72700288?auto=format&fit=crop&w=400&q=80' },
-  { id: 'm10', name: 'Lentil Soup',                calories: 380, image: 'https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=400&q=80' },
-  { id: 'm11', name: 'Scrambled Eggs',             calories: 260, image: 'https://images.unsplash.com/photo-1525351484163-7529414344d8?auto=format&fit=crop&w=400&q=80' },
-  { id: 'm12', name: 'Veggie Stir Fry',            calories: 340, image: 'https://images.unsplash.com/photo-1512058564366-18510be2db19?auto=format&fit=crop&w=400&q=80' },
-]
 
 // ── Edit Plan Structure modal ──────────────────────────────────────────────────
 function EditStructureModal({ open, onClose, slots, onSave }) {
@@ -172,16 +100,74 @@ function EditStructureModal({ open, onClose, slots, onSave }) {
   )
 }
 
+
+
 // ── Edit Meal Collection modal ─────────────────────────────────────────────────
 function EditCollectionModal({ open, onClose, slot, onSave }) {
-  const [search, setSearch] = useState('')
-  const [selected, setSelected] = useState(new Set(slot?.meals.map(m => m.id) || []))
+  const [search, setSearch]           = useState('')
+  const [tag, setTag]                 = useState('all')
+  const [tagOptions, setTagOptions]   = useState([])
+  const [meals, setMeals]             = useState([])
+  const [loading, setLoading]         = useState(false)
+  const [error, setError]             = useState(null)
+  const [selected, setSelected]       = useState(new Set())
+  const [detailMeal, setDetailMeal]         = useState(null)
+  const [isDetailLoading, setIsDetailLoading] = useState(false)
+
+  async function openDetail(meal) {
+  setDetailMeal(meal)          // show modal immediately with what we have
+  setIsDetailLoading(true)
+  try {
+    console.log(meal.id);
+    
+      const full = await getMeal(meal.id)
+      setDetailMeal(full)
+    } catch (err) {
+      // keep the partial data already set
+      console.log("Failed to get meal details");
+      console.log(err);
+      
+    } finally {
+      setIsDetailLoading(false)
+    }
+  }
+
+  // Fetch tag options once on open
+  useEffect(() => {
+    if (!open) return
+    getFilterOptions()
+      .then(data => setTagOptions(data.tags ?? []))
+      .catch(() => setTagOptions([]))
+  }, [open])
+
+  // Sync selected IDs when slot changes
+  useEffect(() => {
+    if (open) {
+      setSearch('')
+      setTag('all')
+      setSelected(new Set(slot?.meals.map(m => m.id) || []))
+    }
+  }, [open, slot])
+
+  // Debounced fetch
+  useEffect(() => {
+    if (!open) return
+    const timer = setTimeout(() => {
+      setLoading(true)
+      setError(null)
+      getMeals({
+        search: search || undefined,
+        tag: tag !== 'all' ? tag : undefined,
+        page_size: 50,
+      })
+        .then(data => setMeals(data.results))
+        .catch(() => setError('Failed to load meals.'))
+        .finally(() => setLoading(false))
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [search, tag, open])
 
   if (!slot) return null
-
-  const filtered = MEAL_LIBRARY.filter(m =>
-    m.name.toLowerCase().includes(search.toLowerCase())
-  )
 
   function toggle(id) {
     setSelected(s => {
@@ -192,17 +178,33 @@ function EditCollectionModal({ open, onClose, slot, onSave }) {
   }
 
   function handleSave() {
-    const meals = MEAL_LIBRARY.filter(m => selected.has(m.id)).map(m => ({
-      ...m, protein: 20, carbs: 30, fat: 10, warning: null,
+    // Keep previously selected meals that aren't in the current page,
+    // merge with newly selected ones from current results
+    const currentPageSelected = meals.filter(m => selected.has(m.id))
+    const previouslySelected  = (slot.meals || []).filter(
+      m => selected.has(m.id) && !meals.find(cm => cm.id === m.id)
+    )
+    const merged = [...previouslySelected, ...currentPageSelected].map(m => ({
+      ...m,
+      name:    m.title,          // normalise title → name for the rest of the page
+      calories: m.nutrition?.calories_cal ?? 0,
+      protein:  m.nutrition?.protein_g    ?? 0,
+      carbs:    m.nutrition?.carbohydrates_g ?? 0,
+      fat:      m.nutrition?.total_fat_g  ?? 0,
+      warning:  null,
+      image:    m.image_url,            
     }))
-    onSave(slot.id, meals)
+    onSave(slot.id, merged)
     onClose()
   }
 
   return (
     <Modal open={open} onClose={onClose} title={`Meal Collection — ${slot.label}`} size="lg">
-      <p className="text-body-sm text-text-disabled">Select which meals are available for this slot. The user can then choose or randomize from this collection daily.</p>
+      <p className="text-body-sm text-text-disabled">
+        Select which meals are available for this slot.
+      </p>
 
+      {/* Search */}
       <input
         value={search}
         onChange={e => setSearch(e.target.value)}
@@ -210,23 +212,60 @@ function EditCollectionModal({ open, onClose, slot, onSave }) {
         className="w-full rounded-md px-4 py-2 text-body-sm border border-border-primary focus:outline-none focus:border-meals-prim bg-surface-primary text-text-body"
       />
 
+      {/* Tag filter */}
+      <select
+        value={tag}
+        onChange={e => setTag(e.target.value)}
+        className="w-full rounded-md px-4 py-2 text-body-sm border border-border-primary focus:outline-none focus:border-meals-prim bg-surface-primary text-text-body"
+      >
+        <option value="all">All tags</option>
+        {tagOptions.map(t => (
+          <option key={t} value={t}>{t}</option>
+        ))}
+      </select>
+
+      {/* Results */}
       <div className="flex flex-col gap-2 max-h-72 overflow-y-auto">
-        {filtered.map(meal => {
+        {loading && <p className="text-body-sm text-text-disabled text-center py-4">Loading...</p>}
+        {error   && <p className="text-body-sm text-text-error text-center py-4">{error}</p>}
+        {!loading && !error && meals.map(meal => {
           const isSelected = selected.has(meal.id)
           return (
-            <button key={meal.id} onClick={() => toggle(meal.id)}
-              className={cn('flex items-center gap-3 px-3 py-2 rounded-xl border transition-colors text-left',
+            <div 
+              key={meal.id} 
+              onClick={() => toggle(meal.id)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  toggle(meal.id);
+                }
+              }}
+              className={cn('flex items-center gap-3 px-3 py-2 rounded-xl border transition-colors text-left cursor-pointer',
                 isSelected ? 'border-meals-prim bg-meals-prim-100' : 'border-border-primary hover:border-meals-prim'
-              )}>
-              <img src={meal.image} alt={meal.name} className="w-12 h-12 rounded-lg object-cover shrink-0" />
+              )}
+            >
+              <img src={meal.image_url} alt={meal.title} className="w-12 h-12 rounded-lg object-cover shrink-0" />
               <div className="flex-1 min-w-0">
-                <p className="text-body-sm font-semibold text-text-headings truncate">{meal.name}</p>
-                <p className="text-body-sm text-text-disabled">{meal.calories} kcal</p>
+                <p className="text-body-sm font-semibold text-text-headings truncate">{meal.title}</p>
+                <p className="text-body-sm text-text-disabled">{meal.nutrition?.calories_cal ?? '—'} kcal</p>
               </div>
+
+              {/* Detail button */}
+              <button
+                onClick={e => { e.stopPropagation(); openDetail(meal) }}
+                className="p-1.5 rounded-lg text-text-disabled hover:text-meals-prim hover:bg-meals-prim-100 transition-colors shrink-0"
+                title="View details"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+              </button>
               {isSelected && (
                 <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-meals-prim shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
               )}
-            </button>
+            </div>
           )
         })}
       </div>
@@ -237,6 +276,118 @@ function EditCollectionModal({ open, onClose, slot, onSave }) {
         <Button variant="meals-outline" size="md" onClick={onClose} className="flex-1">Cancel</Button>
         <Button variant="meals-primary" size="md" onClick={handleSave} className="flex-1">Save Collection</Button>
       </div>
+      {/* Meal detail modal — rendered on top of the collection modal */}
+      {detailMeal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-neutral-black/50 backdrop-blur-xs"
+            onClick={() => !isDetailLoading && setDetailMeal(null)}
+          />
+          <div className="relative bg-surface-primary rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh] border border-border-primary">
+            {isDetailLoading ? (
+              <div className="flex flex-col items-center justify-center p-20 gap-4">
+                <div className="w-12 h-12 border-4 border-meals-prim border-t-transparent rounded-full animate-spin" />
+                <p className="text-body-md text-text-disabled font-medium">Loading recipe details...</p>
+              </div>
+            ) : (
+              <>
+                {/* Header / Banner */}
+                <div className="relative h-64 shrink-0 overflow-hidden">
+                  <img
+                    src={detailMeal.image_url || 'https://via.placeholder.com/800x400?text=No+Image'}
+                    alt={detailMeal.title}
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-neutral-black/80 via-neutral-black/20 to-transparent" />
+                  <button
+                    onClick={() => setDetailMeal(null)}
+                    className="absolute top-4 right-4 bg-neutral-black/40 hover:bg-neutral-black/60 text-neutral-white p-2 rounded-full transition-colors"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </button>
+                  <div className="absolute bottom-6 left-6 right-6">
+                    {detailMeal.tags?.length > 0 && (
+                      <span className="bg-meals-prim text-neutral-white text-body-xs font-bold px-3 py-1 rounded-full uppercase tracking-wide">
+                        {detailMeal.tags[0]}
+                      </span>
+                    )}
+                    <h2 className="text-heading-h4 font-bold text-neutral-white mt-2 leading-tight">{detailMeal.title}</h2>
+                  </div>
+                </div>
+
+                {/* Body */}
+                <div className="flex-1 overflow-y-auto px-8 py-6 flex flex-col gap-8">
+                  {/* Nutrition */}
+                  <div className="flex flex-col gap-3">
+                    <h3 className="text-body-md font-bold text-text-headings">Nutrition Information</h3>
+                    <div className="grid grid-cols-4 gap-4">
+                      {[
+                        { label: 'Calories', value: detailMeal.nutrition?.calories_cal ?? 0, unit: '', highlight: true },
+                        { label: 'Protein',  value: detailMeal.nutrition?.protein_g ?? 0,    unit: 'g' },
+                        { label: 'Carbs',    value: detailMeal.nutrition?.carbohydrates_g ?? 0, unit: 'g' },
+                        { label: 'Fats',     value: detailMeal.nutrition?.total_fat_g ?? 0,  unit: 'g' },
+                      ].map(({ label, value, unit, highlight }) => (
+                        <div key={label} className={cn('p-4 rounded-2xl border text-center flex flex-col justify-center',
+                          highlight ? 'bg-meals-prim-100/50 border-meals-prim-100' : 'bg-neutral-100 border-border-primary'
+                        )}>
+                          <p className={cn('text-heading-h5 font-extrabold leading-none', highlight ? 'text-meals-prim' : 'text-text-headings')}>
+                            {value}{unit}
+                          </p>
+                          <p className="text-body-xs text-text-disabled font-medium mt-1 uppercase">{label}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Ingredients */}
+                  <div className="flex flex-col gap-3 border-t border-border-primary pt-6">
+                    <h3 className="text-body-md font-bold text-text-headings">Ingredients Needed</h3>
+                    <h3>{detailMeal.ingredients} aaaaaaaaa</h3> 
+                    {detailMeal.ingredients?.length > 0 ? (
+                      <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                        {detailMeal.ingredients.map((ing, idx) => (
+                          <li key={idx} className="flex items-start gap-3 text-body-md text-text-body">
+                            <div className="w-5 h-5 mt-0.5 rounded-md border border-meals-prim bg-meals-prim-100/30 flex items-center justify-center shrink-0">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 text-meals-prim" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                            </div>
+                            <span className="flex-1">{ing}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-text-disabled italic text-body-md">No ingredients listed.</p>
+                    )}
+                  </div>
+
+                  {/* Instructions */}
+                  <div className="flex flex-col gap-3 border-t border-border-primary pt-6">
+                    <h3 className="text-body-md font-bold text-text-headings">Cooking Instructions</h3>
+                    {detailMeal.instructions?.length > 0 ? (
+                      <ol className="flex flex-col gap-3.5">
+                        {detailMeal.instructions.map((step, idx) => (
+                          <li key={idx} className="flex gap-4 text-body-md text-text-body items-start">
+                            <span className="w-6 h-6 rounded-full bg-meals-prim-100 text-meals-prim flex items-center justify-center shrink-0 font-bold text-body-sm mt-0.5">{idx + 1}</span>
+                            <span className="flex-1 pt-0.5">{step}</span>
+                          </li>
+                        ))}
+                      </ol>
+                    ) : (
+                      <p className="text-text-disabled italic text-body-md">No instructions listed.</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Footer */}
+                <div className="border-t border-border-primary px-8 py-5 shrink-0 bg-neutral-100">
+                  <Button variant="meals-outline" className="w-full font-bold" onClick={() => setDetailMeal(null)}>
+                    Close Details
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </Modal>
   )
 }
@@ -482,13 +633,13 @@ export default function MealPlanPage() {
   }
 
   function randomMeal(slotId) {
-    setSlots(s => s.map(sl => {
-      if (sl.id !== slotId) return sl
-      const others = sl.meals.filter(m => m.id !== sl.selectedMealId)
-      if (!others.length) return sl
-      const pick = others[Math.floor(Math.random() * others.length)]
-      return { ...sl, selectedMealId: pick.id }
-    }))
+    const sl = slots.find(s => s.id === slotId)
+    if (!sl) return
+    const others = sl.meals.filter(m => m.id !== sl.selectedMealId)
+    if (!others.length) return
+    const pick = others[Math.floor(Math.random() * others.length)]
+    
+    selectMeal(slotId, pick.id)
   }
 
   function saveStructure(newSlots) {
@@ -515,8 +666,8 @@ export default function MealPlanPage() {
     <div className="flex flex-col min-h-screen bg-surface-page">
 
       {/* ── Banner ── */}
-      <div className="relative h-56 overflow-hidden">
-        <img src={plan.image || MOCK_PLAN.image} alt={plan.name} className="w-full h-full object-cover" />
+      <div className="relative h-56 shrink-0 overflow-hidden">
+        <img src={plan.image || 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=1200&q=80'} alt={plan.name} className="w-full h-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-t from-neutral-black via-neutral-black/40 to-transparent" />
         <div className="absolute inset-0 flex flex-col justify-between p-6">
           <button onClick={() => navigate(-1)}

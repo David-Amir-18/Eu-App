@@ -105,6 +105,41 @@ export async function deleteRoutine(routineId) {
   return true
 }
 
+/** PUT /workouts/routines/:routineId — partial update of routine */
+export async function updateRoutine(routineId, payload) {
+  const res = await fetch(`${API_URL}/workouts/routines/${routineId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify(payload),
+  })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.detail || 'Failed to update routine')
+  return data // WorkoutPlanRoutineResponse
+}
+
+/** Clone a routine to another day */
+export async function cloneRoutine(planId, routineId, newDayOfWeek) {
+  const original = await getRoutine(routineId)
+  const created = await createRoutine(planId, {
+    name: original.name,
+    description: original.description,
+    day_of_week: newDayOfWeek,
+    is_rest_day: original.is_rest_day,
+    position: original.position,
+  })
+  for (const ex of original.exercises || []) {
+    await addExerciseToRoutine(created.id, {
+      exercise_id: ex.exercise_id,
+      position: ex.position,
+      sets: ex.sets,
+      reps: ex.reps,
+      weight_kg: ex.weight_kg,
+      rest_time_seconds: ex.rest_time_seconds,
+    })
+  }
+  return created
+}
+
 // ── Exercise management within a routine ──────────────────────────────────────
 
 /**
