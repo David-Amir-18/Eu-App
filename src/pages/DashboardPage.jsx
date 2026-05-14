@@ -6,41 +6,11 @@ import { getUserMetrics } from '../api/authService.js'
 import { getWorkoutPlans, getWorkoutPlan } from '../api/workoutsService.js'
 import { getMealPlans, getMealPlan } from '../api/mealPlansService.js'
 import { Menu } from '../components/molecules/Menu.jsx'
+import { getWorkoutSessions } from '../api/workoutTrackingService.js'
+import { getEatenMeals } from '../api/mealTrackingService.js'
+import { getDailyLog, upsertDailyLog, listDailyLogs } from '../api/dailyLogsService.js'
 
-// ── Mock Data ──────────────────────────────────────────────────────────────────
-const WORKOUT_MOCK_DATA = {
-  Week: { labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], data: [1, 0, 1, 0, 1, 1, 0] },
-  Month: { labels: ['W1', 'W2', 'W3', 'W4'], data: [3, 4, 3, 5] },
-  Year: { labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'], data: [12, 14, 15, 10, 16, 14, 18, 15, 12, 16, 14, 15] }
-}
-
-const MEALS_MOCK_DATA = {
-  'Meals': {
-    Week: { labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], data: [3, 4, 3, 4, 3, 4, 3] },
-    Month: { labels: ['W1', 'W2', 'W3', 'W4'], data: [21, 24, 22, 25] },
-    Year: { labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'], data: [90, 85, 95, 90, 100, 95, 90, 95, 90, 95, 90, 95] }
-  },
-  'Calories': {
-    Week: { labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], data: [2100, 2400, 1950, 2200, 2500, 2600, 2300] },
-    Month: { labels: ['W1', 'W2', 'W3', 'W4'], data: [15400, 16200, 14800, 16500] },
-    Year: { labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'], data: [65000, 62000, 68000, 64000, 70000, 66000, 67000, 65000, 66000, 69000, 64000, 68000] }
-  },
-  'Carbs (g)': {
-    Week: { labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], data: [250, 280, 220, 260, 290, 300, 270] },
-    Month: { labels: ['W1', 'W2', 'W3', 'W4'], data: [1800, 1950, 1750, 1900] },
-    Year: { labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'], data: [7500, 7100, 7800, 7300, 8000, 7600, 7700, 7500, 7600, 7900, 7400, 7800] }
-  },
-  'Protein (g)': {
-    Week: { labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], data: [140, 160, 130, 150, 170, 180, 150] },
-    Month: { labels: ['W1', 'W2', 'W3', 'W4'], data: [1000, 1100, 950, 1150] },
-    Year: { labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'], data: [4200, 3900, 4400, 4100, 4600, 4300, 4400, 4200, 4300, 4500, 4100, 4400] }
-  },
-  'Fats (g)': {
-    Week: { labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], data: [60, 75, 55, 65, 80, 85, 70] },
-    Month: { labels: ['W1', 'W2', 'W3', 'W4'], data: [450, 520, 420, 550] },
-    Year: { labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'], data: [1900, 1800, 2100, 1950, 2200, 2050, 2100, 1950, 2000, 2150, 1900, 2100] }
-  }
-}
+// Removed Static Mock Constants (replaced by live backend data aggregators)
 
 function getGreeting() {
   const h = new Date().getHours()
@@ -139,6 +109,18 @@ export default function DashboardPage() {
   const [dietPlan, setDietPlan] = useState(null)
   const [plansLoading, setPlansLoading] = useState(true)
 
+  // Live tracking server records
+  const [workoutSessions, setWorkoutSessions] = useState([])
+  const [eatenMeals, setEatenMeals] = useState([])
+  const [hasWorkoutHistory, setHasWorkoutHistory] = useState(false)
+  const [hasMealHistory, setHasMealHistory] = useState(false)
+
+  // Daily Wellbeing Log States
+  const [recoveryNotes, setRecoveryNotes] = useState('')
+  const [isSavingLog, setIsSavingLog] = useState(false)
+  const [journalToast, setJournalToast] = useState('')
+  const [recentLogs, setRecentLogs] = useState([])
+
   // Chart states
   const [workoutTime, setWorkoutTime] = useState('Week')
   const [mealTime, setMealTime] = useState('Week')
@@ -163,8 +145,10 @@ export default function DashboardPage() {
         setProfileLoading(false)
       }
 
+      // Fetching standard workout plan for today's routines card
       try {
         const wPlans = await getWorkoutPlans()
+        setHasWorkoutHistory(wPlans && wPlans.length > 0)
         if (wPlans && wPlans.length > 0) {
           const fullWPlan = await getWorkoutPlan(wPlans[0].id)
           setWorkoutPlan(fullWPlan)
@@ -173,8 +157,13 @@ export default function DashboardPage() {
         console.error('Failed to fetch workout plans:', e)
       }
       
+      // Fetching meal/diet plan details for today's meals card
       try {
+        const mPlans = await getMealPlans()
         const storedPlans = localStorage.getItem('user_plans')
+        const hasStoredDiet = storedPlans ? JSON.parse(storedPlans).some(p => p.defaultTab === 'Diet' || p.id === 'custom-diet-plan') : false
+        setHasMealHistory((mPlans && mPlans.length > 0) || hasStoredDiet)
+
         if (storedPlans) {
             const plans = JSON.parse(storedPlans)
             const dPlan = plans.find(p => p.id === 'custom-diet-plan' || p.defaultTab === 'Diet')
@@ -185,9 +174,76 @@ export default function DashboardPage() {
       } finally {
          setPlansLoading(false)
       }
+
+      // Fetch live telemetry summaries from current calendar year
+      const fromDate = `${new Date().getFullYear()}-01-01`
+
+      try {
+        const sessions = await getWorkoutSessions({ status: 'completed', from_date: fromDate })
+        setWorkoutSessions(sessions.results || [])
+      } catch (err) {
+        console.error('Telemetry failed for workouts', err)
+      }
+
+      try {
+        const meals = await getEatenMeals({ from_date: fromDate })
+        setEatenMeals(meals.results || [])
+      } catch (err) {
+        console.error('Telemetry failed for meals', err)
+      }
+
+      // Load today's existing daily recovery journal
+      try {
+        const todayStr = new Date().toISOString().split('T')[0]
+        const log = await getDailyLog(todayStr)
+        if (log) {
+          setRecoveryNotes(log.recovery_notes || '')
+        }
+      } catch (err) {
+        console.error('Failed to load daily log', err)
+      }
+
+      // Load recent historical daily logs
+      try {
+        const logs = await listDailyLogs()
+        setRecentLogs(logs.results || [])
+      } catch (err) {
+        console.error('Failed to load historical logs', err)
+      }
     }
     fetchAll()
   }, [userId])
+
+
+  // Handle committing user recovery notes + auto aggregates to server
+  const handleSaveDailyLog = async () => {
+    try {
+      setIsSavingLog(true)
+      const todayStr = new Date().toISOString().split('T')[0]
+      
+      const payload = {
+        date: todayStr,
+        calories_consumed: Math.round(todayCalories),
+        workouts_completed: todayWorkoutsDone,
+        recovery_notes: recoveryNotes
+      }
+      
+      await upsertDailyLog(payload)
+      
+      // Instant refresh history locally so timeline updates live!
+      try {
+        const logs = await listDailyLogs()
+        setRecentLogs(logs.results || [])
+      } catch (e) {}
+      
+      setJournalToast('Daily Log saved successfully!')
+      setTimeout(() => setJournalToast(''), 3000)
+    } catch (err) {
+      console.error('Failed to save daily journal', err)
+    } finally {
+      setIsSavingLog(false)
+    }
+  }
 
   const toggleExercise = async (routineId, idx) => {
     if (!workoutPlan) return
@@ -234,12 +290,174 @@ export default function DashboardPage() {
   ) || workoutPlan?.plan_routines?.find(r => !r.is_rest_day) // Fallback to first non-rest routine
   
   const uniqueExercises = todayRoutine?.exercises?.filter((v, i, a) => {
+      if (!v) return false;
       if (typeof v === 'string') return a.indexOf(v) === i;
-      return a.findIndex(t => (t.id === v.id || t.exercise_id === v.exercise_id)) === i;
+      return a.findIndex(t => t && (t.id === v.id || t.exercise_id === v.exercise_id)) === i;
   }) || []
 
   // Prepare meals
   const todayMeals = dietPlan?.slots || []
+
+  // ── Live Today's Aggregate Metrics for Telemetry Badge ──────────────────
+  const todayCalories = useMemo(() => {
+    if (!Array.isArray(todayMeals)) return 0
+    return todayMeals.reduce((sum, slot) => {
+      if (slot && slot.taken) {
+        const meal = slot.meals?.find(m => m && m.id === slot.selectedMealId) || slot.meals?.[0]
+        return sum + (meal?.calories || meal?.nutrition?.calories_cal || 0)
+      }
+      return sum
+    }, 0)
+  }, [todayMeals])
+
+  const todayWorkoutsDone = useMemo(() => {
+    if (!Array.isArray(uniqueExercises)) return 0
+    return uniqueExercises.reduce((count, ex) => {
+      const isDone = (ex && typeof ex === 'object') ? (ex.is_completed || ex.taken) : false
+      return count + (isDone ? 1 : 0)
+    }, 0)
+  }, [uniqueExercises])
+
+  // ── Live Workout Performance Aggregator Memo ────────────────────────────
+  const workoutChartData = useMemo(() => {
+    const now = new Date()
+    let labels = []
+    let data = []
+
+    if (workoutTime === 'Week') {
+      labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+      data = Array(7).fill(0)
+      
+      const currentDay = now.getDay()
+      const distanceToMon = currentDay === 0 ? -6 : 1 - currentDay
+      const startOfWeek = new Date(now)
+      startOfWeek.setDate(now.getDate() + distanceToMon)
+      startOfWeek.setHours(0, 0, 0, 0)
+      
+      const endOfWeek = new Date(startOfWeek)
+      endOfWeek.setDate(startOfWeek.getDate() + 6)
+      endOfWeek.setHours(23, 59, 59, 999)
+
+      workoutSessions.forEach(sess => {
+        if (!sess || !sess.scheduled_date) return
+        const d = new Date(sess.scheduled_date)
+        if (isNaN(d.getTime())) return
+        if (d >= startOfWeek && d <= endOfWeek) {
+          const dayIdx = d.getDay() === 0 ? 6 : d.getDay() - 1
+          data[dayIdx] += 1
+        }
+      })
+    } else if (workoutTime === 'Month') {
+      labels = ['W1', 'W2', 'W3', 'W4']
+      data = Array(4).fill(0)
+      
+      workoutSessions.forEach(sess => {
+        const d = new Date(sess.scheduled_date)
+        if (d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()) {
+          const day = d.getDate()
+          if (day <= 7) data[0] += 1
+          else if (day <= 14) data[1] += 1
+          else if (day <= 21) data[2] += 1
+          else data[3] += 1
+        }
+      })
+    } else { // Year
+      labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+      data = Array(12).fill(0)
+      
+      workoutSessions.forEach(sess => {
+        const d = new Date(sess.scheduled_date)
+        if (d.getFullYear() === now.getFullYear()) {
+          const monthIdx = d.getMonth()
+          data[monthIdx] += 1
+        }
+      })
+    }
+
+    const total = data.reduce((a, b) => a + b, 0)
+    return { labels, data, total }
+  }, [workoutSessions, workoutTime])
+
+  // ── Live Nutrition & Macronutrient Aggregator Memo ──────────────────────
+  const mealChartData = useMemo(() => {
+    const now = new Date()
+    let labels = []
+    let data = []
+
+    const getVal = (mItem) => {
+      if (!mItem) return 0
+      if (mealMetric === 'Meals') return 1
+      if (!mItem?.meal?.nutrition) return 0
+      const n = mItem.meal.nutrition
+      if (mealMetric === 'Calories') return n.calories_cal || 0
+      if (mealMetric === 'Carbs (g)') return n.carbohydrates_g || 0
+      if (mealMetric === 'Protein (g)') return n.protein_g || 0
+      if (mealMetric === 'Fats (g)') return n.total_fat_g || 0
+      return 0
+    }
+
+    if (mealTime === 'Week') {
+      labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+      data = Array(7).fill(0)
+
+      const currentDay = now.getDay()
+      const distanceToMon = currentDay === 0 ? -6 : 1 - currentDay
+      const startOfWeek = new Date(now)
+      startOfWeek.setDate(now.getDate() + distanceToMon)
+      startOfWeek.setHours(0, 0, 0, 0)
+
+      const endOfWeek = new Date(startOfWeek)
+      endOfWeek.setDate(startOfWeek.getDate() + 6)
+      endOfWeek.setHours(23, 59, 59, 999)
+
+      eatenMeals.forEach(m => {
+        if (!m || !m.scheduled_date) return
+        const d = new Date(m.scheduled_date)
+        if (isNaN(d.getTime())) return
+        if (d >= startOfWeek && d <= endOfWeek) {
+          const dayIdx = d.getDay() === 0 ? 6 : d.getDay() - 1
+          data[dayIdx] += getVal(m)
+        }
+      })
+    } else if (mealTime === 'Month') {
+      labels = ['W1', 'W2', 'W3', 'W4']
+      data = Array(4).fill(0)
+
+      eatenMeals.forEach(m => {
+        const d = new Date(m.scheduled_date)
+        if (d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()) {
+          const day = d.getDate()
+          const val = getVal(m)
+          if (day <= 7) data[0] += val
+          else if (day <= 14) data[1] += val
+          else if (day <= 21) data[2] += val
+          else data[3] += val
+        }
+      })
+    } else { // Year
+      labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+      data = Array(12).fill(0)
+
+      eatenMeals.forEach(m => {
+        const d = new Date(m.scheduled_date)
+        if (d.getFullYear() === now.getFullYear()) {
+          const monthIdx = d.getMonth()
+          data[monthIdx] += getVal(m)
+        }
+      })
+    }
+
+    if (mealMetric !== 'Meals' && mealMetric !== 'Calories') {
+      data = data.map(val => Math.round(val * 10) / 10)
+    }
+    
+    let total = data.reduce((a, b) => a + b, 0)
+    if (mealMetric !== 'Meals' && mealMetric !== 'Calories') {
+      total = Math.round(total * 10) / 10
+    }
+
+    return { labels, data, total }
+  }, [eatenMeals, mealTime, mealMetric])
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -280,7 +498,8 @@ export default function DashboardPage() {
                         {todayMeals.length > 0 ? (
                             <div className="flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory scrollbar-hide -mx-8 px-8 md:mx-0 md:px-0">
                                 {todayMeals.map(slot => {
-                                    const meal = slot.meals?.find(m => m.id === slot.selectedMealId) || slot.meals?.[0]
+                                    if (!slot) return null
+                                    const meal = slot.meals?.find(m => m && m.id === slot.selectedMealId) || slot.meals?.[0]
                                     const imageUrl = meal?.image || meal?.image_url || 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=800&q=80'
 
                                     return (
@@ -327,9 +546,10 @@ export default function DashboardPage() {
                         {todayRoutine ? (
                             <div className="flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory scrollbar-hide -mx-8 px-8 md:mx-0 md:px-0">
                                 {uniqueExercises.map((ex, idx) => {
-                                    const title = typeof ex === 'string' ? ex : (ex.title || ex.exercise?.title)
-                                    const taken = typeof ex === 'object' ? (ex.is_completed || ex.taken) : false
-                                    const imageUrl = (typeof ex === 'object' && ex.thumbnail_url) ? ex.thumbnail_url : 'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&w=800&q=80'
+                                    if (!ex) return null
+                                    const title = typeof ex === 'string' ? ex : (ex?.title || ex?.exercise?.title || 'Exercise')
+                                    const taken = (ex && typeof ex === 'object') ? (ex.is_completed || ex.taken) : false
+                                    const imageUrl = (ex && typeof ex === 'object' && ex.thumbnail_url) ? ex.thumbnail_url : 'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&w=800&q=80'
                                     
                                     return (
                                         <div key={idx} className="relative w-[85%] sm:w-[320px] h-[400px] shrink-0 snap-center rounded-2xl overflow-hidden shadow-md group">
@@ -378,58 +598,191 @@ export default function DashboardPage() {
             )}
         </section>
 
-        {/* Statistics Section */}
-        <section aria-label="Statistics">
-            <h2 className="text-heading-h5 font-bold text-text-headings mb-5">Your Statistics</h2>
-            
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-6">
-            <BarChart 
-                title="Workouts Overview" 
-                data={WORKOUT_MOCK_DATA[workoutTime].data}
-                labels={WORKOUT_MOCK_DATA[workoutTime].labels}
-                total={WORKOUT_MOCK_DATA[workoutTime].data.reduce((a,b)=>a+b, 0)}
-                totalLabel={`workouts / ${workoutTime.toLowerCase()}`}
-                actions={
-                <SegmentedControl 
-                    options={['Week', 'Month', 'Year']} 
-                    selected={workoutTime} 
-                    onChange={setWorkoutTime} 
-                />
-                }
-            />
-            <BarChart 
-                title="Nutrition Overview" 
-                data={MEALS_MOCK_DATA[mealMetric][mealTime].data}
-                labels={MEALS_MOCK_DATA[mealMetric][mealTime].labels}
-                total={MEALS_MOCK_DATA[mealMetric][mealTime].data.reduce((a,b)=>a+b, 0)}
-                totalLabel={`${mealMetric} / ${mealTime.toLowerCase()}`}
-                actions={
-                <>
-                    <Menu
-                    placement="bottom-end"
-                    trigger={
-                        <button className="flex items-center gap-2 px-3 py-1.5 bg-surface-primary border border-border-primary rounded-lg text-body-sm font-semibold text-text-headings hover:bg-neutral-100 transition-colors shadow-sm whitespace-nowrap">
-                        {mealMetric}
-                        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-                        </button>
-                    }
-                    items={[
-                        { label: 'Meals Taken', onClick: () => setMealMetric('Meals') },
-                        { label: 'Calories', onClick: () => setMealMetric('Calories') },
-                        { label: 'Carbs (g)', onClick: () => setMealMetric('Carbs (g)') },
-                        { label: 'Fats (g)', onClick: () => setMealMetric('Fats (g)') },
-                        { label: 'Protein (g)', onClick: () => setMealMetric('Protein (g)') },
-                    ]}
-                    />
-                    <SegmentedControl 
-                    options={['Week', 'Month', 'Year']} 
-                    selected={mealTime} 
-                    onChange={setMealTime} 
-                    />
-                </>
-                }
-            />
+        {/* Statistics Section — Conditioned strictly on existing plans ownership */}
+        {(hasWorkoutHistory || hasMealHistory) && (
+          <section aria-label="Statistics">
+              <h2 className="text-heading-h5 font-bold text-text-headings mb-5">Your Statistics</h2>
+              
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-6">
+                {hasWorkoutHistory && (
+                  <BarChart 
+                      title="Workouts Overview" 
+                      data={workoutChartData.data}
+                      labels={workoutChartData.labels}
+                      total={workoutChartData.total}
+                      totalLabel={`workouts / ${workoutTime.toLowerCase()}`}
+                      actions={
+                      <SegmentedControl 
+                          options={['Week', 'Month', 'Year']} 
+                          selected={workoutTime} 
+                          onChange={setWorkoutTime} 
+                      />
+                      }
+                  />
+                )}
+
+                {hasMealHistory && (
+                  <BarChart 
+                      title="Nutrition Overview" 
+                      data={mealChartData.data}
+                      labels={mealChartData.labels}
+                      total={mealChartData.total}
+                      totalLabel={`${mealMetric} / ${mealTime.toLowerCase()}`}
+                      actions={
+                      <>
+                          <Menu
+                          placement="bottom-end"
+                          trigger={
+                              <button className="flex items-center gap-2 px-3 py-1.5 bg-surface-primary border border-border-primary rounded-lg text-body-sm font-semibold text-text-headings hover:bg-neutral-100 transition-colors shadow-sm whitespace-nowrap">
+                              {mealMetric}
+                              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                              </button>
+                          }
+                          items={[
+                              { label: 'Meals Taken', onClick: () => setMealMetric('Meals') },
+                              { label: 'Calories', onClick: () => setMealMetric('Calories') },
+                              { label: 'Carbs (g)', onClick: () => setMealMetric('Carbs (g)') },
+                              { label: 'Fats (g)', onClick: () => setMealMetric('Fats (g)') },
+                              { label: 'Protein (g)', onClick: () => setMealMetric('Protein (g)') },
+                          ]}
+                          />
+                          <SegmentedControl 
+                          options={['Week', 'Month', 'Year']} 
+                          selected={mealTime} 
+                          onChange={setMealTime} 
+                          />
+                      </>
+                      }
+                  />
+                )}
+              </div>
+          </section>
+        )}
+
+        {/* Daily Journal & Recovery Insights */}
+        <section className="bg-surface-primary rounded-2xl border border-border-primary p-6 shadow-sm relative h-fit animate-fade-in z-10 flex flex-col gap-6">
+          <div className="absolute top-[-30px] right-[-30px] w-48 h-48 bg-rehab-prim-100/20 rounded-full blur-3xl pointer-events-none" />
+          
+          {/* Row 1: Entry Form and Summary */}
+          <div className="flex flex-col md:flex-row gap-6 z-10">
+            <div className="flex-1 space-y-4 z-10">
+              <div className="flex flex-col gap-1">
+                <h2 className="text-heading-h6 font-bold text-text-headings flex items-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-rehab-prim" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                  Daily Wellbeing Journal
+                </h2>
+                <p className="text-body-sm text-text-disabled leading-relaxed">
+                  Jot down reflections on today&apos;s rehabilitation progress, muscle soreness, motivation, or joint mobility status.
+                </p>
+              </div>
+              
+              <textarea
+                value={recoveryNotes}
+                onChange={e => setRecoveryNotes(e.target.value)}
+                placeholder="E.g., Left knee feels highly mobile today. Felt slight tightness during squats. Slept great!..."
+                className="block w-full h-28 bg-neutral-50 rounded-xl px-4 py-3 text-body-md text-text-body placeholder:text-text-disabled focus:outline-none focus:border-rehab-prim border border-border-primary resize-none shadow-inner transition-colors"
+              />
+              
+              <div className="flex items-center justify-end gap-3">
+                {journalToast && (
+                  <span className="text-body-sm font-bold text-success-600 animate-pulse flex items-center gap-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>
+                    Saved successfully
+                  </span>
+                )}
+                <Button 
+                  variant="rehab-primary" 
+                  size="md"
+                  className="font-bold px-6 shadow-sm"
+                  onClick={handleSaveDailyLog}
+                  disabled={isSavingLog}
+                >
+                  {isSavingLog ? 'Synchronizing...' : 'Save Today\'s Log'}
+                </Button>
+              </div>
             </div>
+
+            {/* Automatic Summary Telemetry Block */}
+            <div className="md:w-72 shrink-0 flex flex-col gap-3 bg-neutral-50 border border-border-primary rounded-2xl p-5 z-10 justify-center">
+              <h3 className="text-[11px] font-bold text-text-disabled uppercase tracking-widest mb-1">Today&apos;s Automated Telemetry</h3>
+              
+              <div className="bg-surface-primary border border-border-primary rounded-xl p-4 shadow-xs flex flex-col gap-1 relative overflow-hidden">
+                <span className="text-body-xs font-semibold text-meals-prim flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-meals-prim animate-pulse shrink-0" />
+                  Nutrient Fuel
+                </span>
+                <div className="flex items-baseline gap-1 mt-1">
+                  <span className="text-heading-h4 font-bold text-text-headings">{Math.round(todayCalories)}</span>
+                  <span className="text-body-xs text-text-disabled">kcal consumed</span>
+                </div>
+              </div>
+
+              <div className="bg-surface-primary border border-border-primary rounded-xl p-4 shadow-xs flex flex-col gap-1 relative overflow-hidden">
+                <span className="text-body-xs font-semibold text-workout-prim flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-workout-prim animate-pulse shrink-0" />
+                  Workout Items
+                </span>
+                <div className="flex items-baseline gap-1 mt-1">
+                  <span className="text-heading-h4 font-bold text-text-headings">{todayWorkoutsDone}</span>
+                  <span className="text-body-xs text-text-disabled">/{uniqueExercises.length} exercises done</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Row 2: Wellbeing History Carousel */}
+          <div className="border-t border-border-primary/60 pt-6 z-10 animate-fade-in flex flex-col">
+            <h3 className="text-[11px] font-bold text-text-disabled uppercase tracking-widest mb-4 flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 text-rehab-prim" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              Saved Journal History
+            </h3>
+            
+            {recentLogs.filter(l => l.recovery_notes).length > 0 ? (
+              <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide snap-x">
+                {recentLogs
+                  .filter(l => l.recovery_notes)
+                  .map(item => {
+                    const d = new Date(item.date + 'T12:00:00')
+                    const formatted = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+                    
+                    const isToday = item.date === new Date().toISOString().split('T')[0]
+                    
+                    return (
+                      <div 
+                        key={item.date} 
+                        className={cn(
+                          "min-w-[280px] md:min-w-[320px] border rounded-2xl p-4 shadow-xs shrink-0 snap-start flex flex-col gap-3 transition-all relative overflow-hidden",
+                          isToday 
+                            ? "bg-rehab-prim-100/10 border-rehab-prim/30 ring-1 ring-rehab-prim/20 shadow-md" 
+                            : "bg-neutral-50 border-border-primary hover:border-rehab-prim/30"
+                        )}
+                      >
+                        {isToday && (
+                          <span className="absolute top-0 right-0 bg-rehab-prim text-neutral-white text-[8px] font-extrabold uppercase tracking-widest px-2 py-0.5 rounded-bl-lg flex items-center shadow-xs z-20">
+                            Today
+                          </span>
+                        )}
+                        <div className="flex items-center justify-between border-b border-border-primary/40 pb-2">
+                          <span className="text-body-xs font-bold text-text-headings">{formatted}</span>
+                          <div className="flex items-center gap-2 text-[10px] font-bold text-text-disabled">
+                            {item.calories_consumed > 0 && <span className="flex items-center gap-0.5">🔥 {item.calories_consumed}</span>}
+                            {item.workouts_completed > 0 && <span className="flex items-center gap-0.5">💪 {item.workouts_completed}</span>}
+                          </div>
+                        </div>
+                        <p className="text-body-sm text-text-body italic leading-relaxed line-clamp-3 break-words">&ldquo;{item.recovery_notes}&rdquo;</p>
+                      </div>
+                    )
+                  })
+                }
+              </div>
+            ) : (
+              <div className="bg-neutral-50 border border-dashed border-border-primary rounded-2xl p-6 flex flex-col items-center justify-center text-center py-8 gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8 text-text-disabled opacity-50 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                <span className="text-body-sm font-bold text-text-headings">No recovery logs saved yet</span>
+                <span className="text-body-xs text-text-disabled max-w-xs leading-relaxed">When you write a reflection above and click &ldquo;Save&rdquo;, a snapshot of your day will appear in this timeline feed.</span>
+              </div>
+            )}
+          </div>
         </section>
 
       </div>
