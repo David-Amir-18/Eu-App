@@ -10,16 +10,16 @@ function authHeaders() {
 // ── Mock data ──────────────────────────────────────────────────────────────────
 const MOCK_EXERCISES = {
   items: [
-    { id: 'e1', title: 'Bench Press',       muscle_group: 'chest',     exercise_type: 'weight_reps', equipment_category: 'barbell',  thumbnail_url: null, secondary_muscles: [] },
-    { id: 'e2', title: 'Squat',             muscle_group: 'legs',      exercise_type: 'weight_reps', equipment_category: 'barbell',  thumbnail_url: null, secondary_muscles: [] },
-    { id: 'e3', title: 'Pull-up',           muscle_group: 'back',      exercise_type: 'reps_only',   equipment_category: 'none',     thumbnail_url: null, secondary_muscles: [] },
-    { id: 'e4', title: 'Shoulder Press',    muscle_group: 'shoulders', exercise_type: 'weight_reps', equipment_category: 'dumbbell', thumbnail_url: null, secondary_muscles: [] },
-    { id: 'e5', title: 'Deadlift',          muscle_group: 'back',      exercise_type: 'weight_reps', equipment_category: 'barbell',  thumbnail_url: null, secondary_muscles: [] },
-    { id: 'e6', title: 'Bicep Curl',        muscle_group: 'arms',      exercise_type: 'weight_reps', equipment_category: 'dumbbell', thumbnail_url: null, secondary_muscles: [] },
-    { id: 'e7', title: 'Tricep Dips',       muscle_group: 'arms',      exercise_type: 'reps_only',   equipment_category: 'none',     thumbnail_url: null, secondary_muscles: [] },
-    { id: 'e8', title: 'Leg Press',         muscle_group: 'legs',      exercise_type: 'weight_reps', equipment_category: 'machine',  thumbnail_url: null, secondary_muscles: [] },
-    { id: 'e9', title: 'Lat Pulldown',      muscle_group: 'back',      exercise_type: 'weight_reps', equipment_category: 'machine',  thumbnail_url: null, secondary_muscles: [] },
-    { id: 'e10', title: 'Romanian Deadlift', muscle_group: 'legs',     exercise_type: 'weight_reps', equipment_category: 'barbell',  thumbnail_url: null, secondary_muscles: [] },
+    { id: 'e1', title: 'Bench Press', muscle_group: 'chest', exercise_type: 'weight_reps', equipment_category: 'barbell', thumbnail_url: null, secondary_muscles: [] },
+    { id: 'e2', title: 'Squat', muscle_group: 'legs', exercise_type: 'weight_reps', equipment_category: 'barbell', thumbnail_url: null, secondary_muscles: [] },
+    { id: 'e3', title: 'Pull-up', muscle_group: 'back', exercise_type: 'reps_only', equipment_category: 'none', thumbnail_url: null, secondary_muscles: [] },
+    { id: 'e4', title: 'Shoulder Press', muscle_group: 'shoulders', exercise_type: 'weight_reps', equipment_category: 'dumbbell', thumbnail_url: null, secondary_muscles: [] },
+    { id: 'e5', title: 'Deadlift', muscle_group: 'back', exercise_type: 'weight_reps', equipment_category: 'barbell', thumbnail_url: null, secondary_muscles: [] },
+    { id: 'e6', title: 'Bicep Curl', muscle_group: 'arms', exercise_type: 'weight_reps', equipment_category: 'dumbbell', thumbnail_url: null, secondary_muscles: [] },
+    { id: 'e7', title: 'Tricep Dips', muscle_group: 'arms', exercise_type: 'reps_only', equipment_category: 'none', thumbnail_url: null, secondary_muscles: [] },
+    { id: 'e8', title: 'Leg Press', muscle_group: 'legs', exercise_type: 'weight_reps', equipment_category: 'machine', thumbnail_url: null, secondary_muscles: [] },
+    { id: 'e9', title: 'Lat Pulldown', muscle_group: 'back', exercise_type: 'weight_reps', equipment_category: 'machine', thumbnail_url: null, secondary_muscles: [] },
+    { id: 'e10', title: 'Romanian Deadlift', muscle_group: 'legs', exercise_type: 'weight_reps', equipment_category: 'barbell', thumbnail_url: null, secondary_muscles: [] },
   ],
   total: 10,
   page: 1,
@@ -49,14 +49,19 @@ export async function getExercises({
   const params = new URLSearchParams()
   params.set('page', page)
   params.set('page_size', pageSize)
-  if (exerciseType)      params.set('exercise_type', exerciseType)
-  if (muscleGroup)       params.set('muscle_group', muscleGroup)
+  if (exerciseType) params.set('exercise_type', exerciseType)
+  if (muscleGroup) params.set('muscle_group', muscleGroup)
   if (equipmentCategory) params.set('equipment_category', equipmentCategory)
-  if (search)            params.set('search', search)
-  if (useProfile)        params.set('use_profile', 'true')
+  if (search) params.set('search', search)
+  if (useProfile) params.set('use_profile', 'true')
 
   const res = await fetch(`${API_URL}/exercises/?${params.toString()}`, {
-    headers: authHeaders(),
+    headers: {
+      ...authHeaders(),
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    },
   })
   const data = await res.json()
   if (!res.ok) throw new Error(data.detail || 'Failed to fetch exercises')

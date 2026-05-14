@@ -13,6 +13,7 @@ export function useAuth() {
 // ── Provider ───────────────────────────────────────────────────────────────────
 export function AuthProvider({ children }) {
   const [user, setUser]       = useState(null)   // { id, email, name }
+  const [isAdmin, setIsAdmin] = useState(false)
   const [loading, setLoading] = useState(true)   // true while we verify the token on mount
   const isRefreshing = useRef(false)
   const pendingQueue = useRef([])                 // requests waiting for the refresh to finish
@@ -109,19 +110,31 @@ export function AuthProvider({ children }) {
       const token = getAccessToken()
       if (!token) { setLoading(false); return }
 
+      async function checkAccess(t) {
+        try {
+          const probe = await fetch(`${import.meta.env.VITE_API_URL}/auth/users`, { headers: { Authorization: `Bearer ${t}` } })
+          setIsAdmin(probe.ok)
+        } catch {
+          setIsAdmin(false)
+        }
+      }
+
       try {
         const me = await getMe()
         setUser(me)
+        await checkAccess(token)
       } catch {
         // Access token invalid — try to refresh
         try {
-          await doRefresh()
+          const newToken = await doRefresh()
           const me = await getMe()
           setUser(me)
+          await checkAccess(newToken)
         } catch {
           // Refresh also failed — clear everything
           clearTokens()
           setUser(null)
+          setIsAdmin(false)
         }
       } finally {
         setLoading(false)
@@ -135,6 +148,12 @@ export function AuthProvider({ children }) {
     const data = await apiLogin(identifier, password)
     saveTokens(data)
     setUser(data.user)
+    try {
+      const probe = await fetch(`${import.meta.env.VITE_API_URL}/auth/users`, { headers: { Authorization: `Bearer ${data.access_token}` } })
+      setIsAdmin(probe.ok)
+    } catch {
+      setIsAdmin(false)
+    }
     return data
   }
 
@@ -142,17 +161,19 @@ export function AuthProvider({ children }) {
     const data = await apiRegister(fullName, username, email, password)
     saveTokens(data)
     setUser(data.user)
+    setIsAdmin(false) // Newly registered are never admins immediately
     return data
   }
 
   function logout() {
     clearTokens()
     setUser(null)
+    setIsAdmin(false)
   }
 
   // ── Context value ─────────────────────────────────────────────────────────────
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, apiFetch }}>
+    <AuthContext.Provider value={{ user, isAdmin, loading, login, register, logout, apiFetch }}>
       {children}
     </AuthContext.Provider>
   )
