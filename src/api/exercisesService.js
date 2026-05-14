@@ -117,3 +117,26 @@ export async function archiveExercise(exerciseId) {
   if (!res.ok) throw new Error(data.detail || 'Failed to archive exercise')
   return data
 }
+
+// ── Get dynamic filter options ──────────────────────────────────────────────────
+export async function getExerciseFilters() {
+  if (MOCK) {
+    return {
+      exercise_types: ['weight_reps', 'reps_only', 'duration'],
+      muscle_groups: ['chest', 'shoulders', 'upper_back', 'lower_back', 'lats', 'abs', 'obliques', 'biceps', 'triceps', 'forearms', 'quadriceps', 'hamstrings', 'glutes', 'calves'],
+      equipment_categories: ['barbell', 'dumbbell', 'machine', 'none'],
+      manual_tags: []
+    }
+  }
+  const res = await fetch(`${API_URL}/exercises/filters`, {
+    headers: {
+      ...authHeaders(),
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+    },
+  })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.detail || 'Failed to fetch exercise filter options')
+  return data
+}
+

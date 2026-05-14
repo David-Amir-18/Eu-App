@@ -155,10 +155,13 @@ function StatRow({ label, value, max }) {
 }
 
 // ── Nav items ──────────────────────────────────────────────────────────────────
+import { getDailyLog } from '../../api/dailyLogsService.js'
+
 export function DashboardSidebar() {
   const { isAdmin } = useAuth()
   const [isOpen, setIsOpen] = useState(false)
   const [profile, setProfile] = useState(null)
+  const [dailyLog, setDailyLog] = useState(null)
   const userId = localStorage.getItem('user_id')
   const username = localStorage.getItem('username') || 'User'
 
@@ -176,16 +179,32 @@ export function DashboardSidebar() {
     ? [...baseNavItems.slice(0, 1), { to: '/admin', label: 'Admin Hub', icon: <IconAdmin />, end: false }, ...baseNavItems.slice(1)] 
     : baseNavItems
 
-
   useEffect(() => {
     if (!userId) return
-    getUserMetrics()
-      .then(setProfile)
-      .catch(() => setProfile(null))
+    
+    const todayStr = new Date().toISOString().split('T')[0]
+    
+    const fetchData = async () => {
+      try {
+        const [profileData, logData] = await Promise.allSettled([
+          getUserMetrics(),
+          getDailyLog(todayStr)
+        ])
+        
+        if (profileData.status === 'fulfilled') setProfile(profileData.value)
+        if (logData.status === 'fulfilled') setDailyLog(logData.value)
+      } catch (err) {
+        console.error('Sidebar fetch error:', err)
+      }
+    }
+
+    fetchData()
   }, [userId])
 
-  const streak = profile?.CurrentStreak ?? 0
-  const calorieTarget = profile?.DailyCalorieTarget ?? 2000
+  const calorieTarget = profile?.daily_calorie_target ?? 2000
+  const caloriesConsumed = dailyLog?.calories_consumed ?? 0
+  const workoutsCompleted = dailyLog?.workouts_completed ?? 0
+  const workoutsGoal = 5 
 
   return (
     <>
@@ -236,17 +255,10 @@ export function DashboardSidebar() {
           </button>
         </div>
 
-      {/* Streaks */}
-      {/* <div className="px-5 py-4 border-b border-border-primary flex flex-col gap-3">
-        <p className="text-body-sm font-bold text-text-disabled uppercase tracking-widest">Statistics</p>
-        <StreakBadge label="Meals Streak" count={streak} />
-        <StreakBadge label="Workout Streak" count={streak} />
-      </div> */}
-
       {/* Quick stats */}
       <div className="px-5 py-4 border-b border-border-primary flex flex-col gap-3">
-        <StatRow label="Today's Calories" value={0} max={calorieTarget} />
-        <StatRow label="Today's Workout" value={3} max={5} />
+        <StatRow label="Today's Calories" value={caloriesConsumed} max={calorieTarget} />
+        <StatRow label="Today's Workout" value={workoutsCompleted} max={workoutsGoal} />
       </div>
 
       {/* Nav */}
@@ -271,8 +283,6 @@ export function DashboardSidebar() {
           </NavLink>
         ))}
       </nav>
-
-
 
       {/* Logout */}
       <div className="px-3 py-4 border-t border-border-primary">
