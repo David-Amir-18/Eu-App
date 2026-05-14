@@ -148,7 +148,7 @@ function StatRow({ label, value, max }) {
 
 // ── Nav items ──────────────────────────────────────────────────────────────────
 export function DashboardSidebar() {
-  const { isAdmin, toggleAdminSimulation } = useAuth()
+  const { isAdmin } = useAuth()
   const [profile, setProfile] = useState(null)
   const userId = localStorage.getItem('user_id')
   const username = localStorage.getItem('username') || 'User'
@@ -225,22 +225,7 @@ export function DashboardSidebar() {
         ))}
       </nav>
 
-      {/* Dev Controls */}
-      <div className="px-3 py-2 border-t border-border-primary">
-         <button 
-          onClick={toggleAdminSimulation}
-          className={cn(
-            "flex items-center justify-between w-full gap-3 px-3 py-2 rounded-lg text-body-sm font-bold transition-colors",
-            isAdmin ? "bg-success-100 text-success-600" : "bg-neutral-100 text-neutral-600"
-          )}
-         >
-           <div className="flex items-center gap-2">
-              <IconBolt />
-              <span>Simulate Admin</span>
-           </div>
-           <div className={cn("w-3 h-3 rounded-round", isAdmin ? "bg-success-500" : "bg-neutral-400")} />
-         </button>
-      </div>
+
 
       {/* Logout */}
       <div className="px-3 py-4 border-t border-border-primary">

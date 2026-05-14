@@ -22,7 +22,14 @@ export async function getMeals({ page = 1, pageSize = 20, search, tag, maxCalori
   if (maxSugarG)     params.set('max_sugar_g',    maxSugarG)
   if (useProfile)    params.set('use_profile',    'true')
 
-  const res = await fetch(`${API_URL}/meals/?${params}`, { headers: authHeaders() })
+  const res = await fetch(`${API_URL}/meals/?${params}`, {
+    headers: {
+      ...authHeaders(),
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    },
+  })
   const data = await res.json()
   if (!res.ok) throw new Error(data.detail || 'Failed to fetch meals')
   return data  // { total, page, page_size, results: MealListItem[] }
@@ -120,6 +127,38 @@ export async function removeMealSlot(planId, slotId) {
   if (!res.ok) {
     const data = await res.json().catch(() => ({}))
     throw new Error(data.detail || 'Failed to remove meal slot')
+  }
+  return true
+}
+
+// ── Admin: Meal CRUD ────────────────────────────────────────────────────────────
+
+/**
+ * POST /meals/ — [Admin] Add a meal to library
+ * payload: { title, url?, image_url?, servings?, prep_time?, time_to_make?, instructions?, guide_info?, nutrition?, tags[], ingredients[] }
+ */
+export async function createMeal(payload) {
+  const res = await fetch(`${API_URL}/meals/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify(payload),
+  })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.detail || 'Failed to create meal')
+  return data
+}
+
+/**
+ * DELETE /meals/:id — [Admin] Permanently delete a meal
+ */
+export async function deleteMeal(mealId) {
+  const res = await fetch(`${API_URL}/meals/${mealId}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    throw new Error(data.detail || 'Failed to delete meal')
   }
   return true
 }

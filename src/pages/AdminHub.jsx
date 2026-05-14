@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { getAllUsers } from '../api/adminService.js'
 import { getExercises, createExercise, updateExercise, archiveExercise } from '../api/exercisesService.js'
+import { getMeals, createMeal, deleteMeal } from '../api/mealPlansService.js'
 import { cn } from '../components/utils.js'
 
 // ── Constants mapped to DB domain options ───────────────────────────────────────
@@ -71,6 +72,25 @@ function IconArchive() {
   )
 }
 
+function IconMeal() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 2v2M5 3l1.5 2M19 3l-1.5 2" />
+      <path d="M2 12h20A10 10 0 0 1 2 12z" />
+      <path d="M7 12v-2M12 12v-3M17 12v-2" />
+    </svg>
+  )
+}
+
+function IconEye() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  )
+}
+
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function AdminHub() {
   const [activeTab, setActiveTab] = useState('exercises') // 'users' | 'exercises'
@@ -81,7 +101,7 @@ export default function AdminHub() {
       <header className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="text-left">
           <h1 className="text-heading-h4 font-bold text-text-headings tracking-tight">Admin Hub</h1>
-          <p className="text-body-md text-text-body">System orchestration and library oversight.</p>
+          <p className="text-body-md text-text-body">Database and user oversight.</p>
         </div>
       </header>
 
@@ -98,6 +118,18 @@ export default function AdminHub() {
         >
           <IconDumbbell />
           Exercise Registry
+        </button>
+        <button
+          onClick={() => setActiveTab('meals')}
+          className={cn(
+            "flex items-center gap-2 px-6 py-3 text-body-md font-bold transition-colors border-b-2",
+            activeTab === 'meals'
+              ? "border-text-action text-text-action"
+              : "border-transparent text-text-disabled hover:text-text-body"
+          )}
+        >
+          <IconMeal />
+          Meal Library
         </button>
         <button
           onClick={() => setActiveTab('users')}
@@ -117,6 +149,7 @@ export default function AdminHub() {
       <div className="mt-6 text-left">
         {activeTab === 'users' && <UsersPane />}
         {activeTab === 'exercises' && <ExercisesPane />}
+        {activeTab === 'meals' && <MealsPane />}
       </div>
     </div>
   )
@@ -174,7 +207,7 @@ function UsersPane() {
             ) : users.map((u) => (
               <tr key={u.id} className="hover:bg-neutral-50 transition-colors group">
                 <td className="px-6 py-4">
-                  <div className="font-bold text-text-headings">@{u.username || 'unknown'}</div>
+                  <div className="font-bold text-text-headings">@{u.username || u.email?.split('@')[0] || 'user'}</div>
                   <div className="text-body-sm text-text-body">{u.full_name || '-'}</div>
                 </td>
                 <td className="px-6 py-4 text-body-sm text-text-body">{u.email}</td>
@@ -193,7 +226,7 @@ function UsersPane() {
                   </div>
                 </td>
                 <td className="px-6 py-4 text-body-sm text-text-disabled">
-                  {new Date(u.created_at).toLocaleDateString()}
+                  {u.created_at ? new Date(u.created_at).toLocaleDateString() : '-'}
                 </td>
               </tr>
             ))}
@@ -215,11 +248,14 @@ function ExercisesPane() {
   const [formMode, setFormMode] = useState('create') // 'create' | 'edit'
   const [editingId, setEditingId] = useState(null)
   const [form, setForm] = useState(EMPTY_FORM)
+  const [confirmDialog, setConfirmDialog] = useState(null) // { title: '', message: '', onConfirm: () => void }
+  const [errorAlert, setErrorAlert] = useState(null) // { title: '', message: '' }
+  const [searchQuery, setSearchQuery] = useState('')
 
-  const load = async () => {
+  const load = async (currentSearch = searchQuery) => {
     try {
       setLoading(true)
-      const res = await getExercises({ pageSize: 100 }) // Capped at 100 per FastAPI `le=100` restriction
+      const res = await getExercises({ pageSize: 100, search: currentSearch }) // Capped at 100 per FastAPI `le=100` restriction
       setItems(res.items || [])
     } catch (err) {
       // Extract exact detail message if available (especially for Pydantic Validation Errors which are arrays)
@@ -231,8 +267,11 @@ function ExercisesPane() {
   }
 
   useEffect(() => {
-    load()
-  }, [])
+    const delayDebounce = setTimeout(() => {
+      load()
+    }, searchQuery ? 400 : 0)
+    return () => clearTimeout(delayDebounce)
+  }, [searchQuery])
 
   const openCreate = () => {
     setForm(EMPTY_FORM)
@@ -286,34 +325,51 @@ function ExercisesPane() {
       setModalOpen(false)
       load()
     } catch (err) {
-      alert("Operation Failure: " + err.message)
+      setErrorAlert({ title: "Operation Failure", message: err.message })
     }
   }
 
-  const handleArchive = async (id) => {
-    if (!confirm("Confirm structural archive command. The selected exercise node will be hidden from consumer catalogs.")) return
-    try {
-      await archiveExercise(id)
-      load()
-    } catch (err) {
-      alert("Purge abort: " + err.message)
-    }
+  const handleArchive = (id) => {
+    setConfirmDialog({
+      title: "Confirm Archive Command",
+      message: "Are you sure you want to trigger a structural archive command? The selected exercise node will be hidden from consumer catalogs.",
+      onConfirm: async () => {
+        try {
+          await archiveExercise(id)
+          setItems(prev => prev.filter(ex => ex.id !== id)) // Force immediate UI eviction
+          load()
+        } catch (err) {
+          setErrorAlert({ title: "Operation Failure", message: err.message })
+        }
+      }
+    })
   }
 
   return (
     <div className="w-full">
       <div className="flex justify-between items-center mb-6">
         <div className="flex flex-col gap-1">
-          <h3 className="text-heading-h6 font-bold text-text-headings">Active Data ({items.length})</h3>
-
+          <h3 className="text-heading-h6 font-bold text-text-headings">Active Exercise Data ({items.length})</h3>
         </div>
-        <button
-          onClick={openCreate}
-          className="flex items-center gap-2 bg-surface-action text-neutral-white px-4 py-2 rounded-lg text-body-sm font-bold hover:bg-surface-action-hover transition-colors shadow-sm"
-        >
-          <IconPlus />
-          Add Exercise
-        </button>
+        <div className="flex items-center gap-3">
+          <div className="relative flex items-center">
+            <input
+              type="text"
+              placeholder="Search exercises..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 pr-4 py-2 bg-white border border-neutral-300 rounded-lg text-body-sm outline-none shadow-xs focus:ring-1 focus:ring-surface-action focus:border-surface-action transition-all w-64 text-text-body"
+            />
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-neutral-400 absolute left-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+          </div>
+          <button
+            onClick={openCreate}
+            className="flex items-center gap-2 bg-surface-action text-neutral-white px-4 py-2 rounded-lg text-body-sm font-bold hover:bg-surface-action-hover transition-colors shadow-sm"
+          >
+            <IconPlus />
+            Add Exercise
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -537,6 +593,629 @@ function ExercisesPane() {
               </button>
             </div>
 
+          </div>
+        </div>
+      )}
+      {/* ── CONFIRM DIALOG MODAL ── */}
+      {confirmDialog && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-neutral-900/80 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-border-primary overflow-hidden animate-in zoom-in-95 duration-200 text-left">
+            <div className="p-6">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="p-2.5 bg-amber-50 rounded-full text-amber-600 flex-shrink-0">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                </div>
+                <h3 className="text-heading-h6 font-bold text-text-headings">{confirmDialog.title}</h3>
+              </div>
+              <p className="text-body-sm text-text-body font-medium leading-relaxed">{confirmDialog.message}</p>
+            </div>
+            <div className="px-6 py-4 bg-neutral-50 border-t border-border-primary flex justify-end gap-3">
+              <button onClick={() => setConfirmDialog(null)} className="px-4 py-2 text-body-sm font-bold text-text-body hover:bg-white bg-neutral-50 border border-border-primary rounded-lg transition-all">
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  confirmDialog.onConfirm()
+                  setConfirmDialog(null)
+                }}
+                className="px-5 py-2 text-body-sm font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-lg transition-all shadow-md shadow-amber-600/10"
+              >
+                Archive Node
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── ERROR ALERT MODAL ── */}
+      {errorAlert && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-neutral-900/80 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-border-primary overflow-hidden animate-in zoom-in-95 duration-200 text-left">
+            <div className="p-6">
+              <div className="flex items-center gap-3 mb-3 text-error-600">
+                <div className="p-2.5 bg-rose-50 rounded-full flex-shrink-0">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                </div>
+                <h3 className="text-heading-h6 font-bold text-text-headings">{errorAlert.title}</h3>
+              </div>
+              <p className="text-body-sm text-text-body font-medium leading-relaxed">{errorAlert.message}</p>
+            </div>
+            <div className="px-6 py-4 bg-neutral-50 border-t border-border-primary flex justify-end">
+              <button onClick={() => setErrorAlert(null)} className="px-5 py-2 text-body-sm font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg transition-all">
+                Dismiss Dialog
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Sub-component: Meals Management ───────────────────────────────────────────────
+const EMPTY_MEAL_FORM = {
+  title: '',
+  url: '',
+  image_url: '',
+  servings: 1,
+  prep_time: '',
+  time_to_make: '',
+  guide_info: '',
+  instructions_str: '',
+  tags_str: '',
+  ingredients_str: '',
+
+  // Nutrition optional primitives
+  calories_cal: '',
+  kilojoules_kj: '',
+  protein_g: '',
+  total_fat_g: '',
+  carbohydrates_g: '',
+  sugar_g: '',
+  saturated_fat_g: '',
+  dietary_fibre_g: '',
+  sodium_mg: '',
+  calcium_mg: '',
+  iron_mg: '',
+}
+
+function MealsPane() {
+  const [items, setItems] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  const [modalOpen, setModalOpen] = useState(false)
+  const [form, setForm] = useState(EMPTY_MEAL_FORM)
+  const [viewModalOpen, setViewModalOpen] = useState(false)
+  const [selectedMeal, setSelectedMeal] = useState(null)
+  const [confirmDialog, setConfirmDialog] = useState(null) // { title: '', message: '', onConfirm: () => void }
+  const [errorAlert, setErrorAlert] = useState(null) // { title: '', message: '' }
+  const [searchQuery, setSearchQuery] = useState('')
+
+  const load = async (currentSearch = searchQuery) => {
+    try {
+      setLoading(true)
+      const res = await getMeals({ pageSize: 100, search: currentSearch }) // Limit requested
+      setItems(res.results || [])
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    const delayDebounce = setTimeout(() => {
+      load()
+    }, searchQuery ? 400 : 0)
+    return () => clearTimeout(delayDebounce)
+  }, [searchQuery])
+
+  const openCreate = () => {
+    setForm(EMPTY_MEAL_FORM)
+    setModalOpen(true)
+  }
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+
+    const parseNumber = (val) => {
+      const n = parseFloat(val)
+      return isNaN(n) ? null : n
+    }
+
+    const parseInteger = (val) => {
+      const n = parseInt(val, 10)
+      return isNaN(n) ? null : n
+    }
+
+    // Prepare nutrition payload if any exist
+    const hasNutrition = [
+      form.calories_cal, form.kilojoules_kj, form.protein_g, form.total_fat_g,
+      form.carbohydrates_g, form.sugar_g, form.saturated_fat_g, form.dietary_fibre_g,
+      form.sodium_mg, form.calcium_mg, form.iron_mg
+    ].some(x => x !== '')
+
+    const nutrition = hasNutrition ? {
+      calories_cal: parseInteger(form.calories_cal),
+      kilojoules_kj: parseInteger(form.kilojoules_kj),
+      protein_g: parseNumber(form.protein_g),
+      total_fat_g: parseNumber(form.total_fat_g),
+      carbohydrates_g: parseNumber(form.carbohydrates_g),
+      sugar_g: parseNumber(form.sugar_g),
+      saturated_fat_g: parseNumber(form.saturated_fat_g),
+      dietary_fibre_g: parseNumber(form.dietary_fibre_g),
+      sodium_mg: parseNumber(form.sodium_mg),
+      calcium_mg: parseNumber(form.calcium_mg),
+      iron_mg: parseNumber(form.iron_mg),
+    } : null
+
+    // Split arrays safely
+    const parseList = (str) => str.split('\n').map(s => s.trim()).filter(s => s.length > 0)
+    const parseCommaList = (str) => str.split(',').map(s => s.trim()).filter(s => s.length > 0)
+
+    const payload = {
+      title: form.title.trim(),
+      url: form.url.trim() || null,
+      image_url: form.image_url.trim() || null,
+      servings: parseInt(form.servings, 10) || 1,
+      prep_time: form.prep_time.trim() || null,
+      time_to_make: form.time_to_make.trim() || null,
+      guide_info: form.guide_info.trim() || null,
+      instructions: parseList(form.instructions_str),
+      ingredients: parseList(form.ingredients_str),
+      tags: parseCommaList(form.tags_str),
+      nutrition
+    }
+
+    try {
+      await createMeal(payload)
+      setModalOpen(false)
+      load()
+    } catch (err) {
+      setErrorAlert({ title: "Administrative Mutation Blocked", message: err.message })
+    }
+  }
+
+  const handleDelete = (id) => {
+    setConfirmDialog({
+      title: "Confirm Physical Delete",
+      message: "CAUTION: Confirm physical delete command. This operation permanently destroys the global master meal node index and is completely irreversible.",
+      onConfirm: async () => {
+        try {
+          await deleteMeal(id)
+          load()
+        } catch (err) {
+          const isFetchError = err.message?.includes('Failed to fetch') || err.message?.includes('fetch')
+          setErrorAlert({
+            title: "Delete Interrupted",
+            message: isFetchError 
+              ? "This meal cannot be deleted because it's currently being used in active user meal plans or tracking history."
+              : `Operation Failure: ${err.message}`
+          })
+        }
+      }
+    })
+  }
+
+  return (
+    <div className="w-full">
+      <div className="flex justify-between items-center mb-6">
+        <div className="flex flex-col gap-1">
+          <h3 className="text-heading-h6 font-bold text-text-headings">All Available Meals ({items.length})</h3>
+          <p className="text-body-sm text-text-disabled"></p>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="relative flex items-center">
+            <input
+              type="text"
+              placeholder="Search meals by name..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 pr-4 py-2 bg-white border border-neutral-300 rounded-lg text-body-sm outline-none shadow-xs focus:ring-1 focus:ring-surface-action focus:border-surface-action transition-all w-64 text-text-body"
+            />
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-neutral-400 absolute left-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+          </div>
+          <button
+            onClick={openCreate}
+            className="flex items-center gap-2 bg-emerald-600 text-neutral-white px-4 py-2 rounded-lg text-body-sm font-bold hover:bg-emerald-700 transition-colors shadow-sm"
+          >
+            <IconPlus />
+            Add Meal
+          </button>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="py-12 text-text-disabled font-medium">Fetching dietary schemas from database...</div>
+      ) : error ? (
+        <div className="bg-surface-error border border-border-error p-4 rounded-lg text-text-error font-medium w-fit">{error}</div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {items.map((meal) => (
+            <div key={meal.id} className="bg-white border border-border-primary rounded-xl flex flex-col hover:border-neutral-300 shadow-sm transition-all relative group">
+
+              {/* Thumbnail */}
+              <div className="h-36 bg-neutral-100 border-b border-border-primary rounded-t-xl overflow-hidden shrink-0 relative">
+                {meal.image_url ? (
+                  <img src={meal.image_url} className="w-full h-full object-cover opacity-95" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-body-xs text-text-disabled font-bold bg-neutral-50">NO PREVIEW</div>
+                )}
+                <div className="absolute top-2 right-2">
+                  <span className="bg-neutral-900/75 backdrop-blur-xs text-white text-[10px] font-bold px-2 py-0.5 rounded-round">{meal.servings} Serv</span>
+                </div>
+              </div>
+
+              <div className="p-4 flex-1 flex flex-col justify-between">
+                <div>
+                  <h4 className="font-bold text-text-headings text-body-md leading-snug truncate mb-1" title={meal.title}>{meal.title}</h4>
+                  <div className="flex items-center gap-3 text-body-xs text-text-disabled mb-3 font-medium">
+                    {meal.prep_time && <span>Prep: {meal.prep_time}</span>}
+                    {meal.time_to_make && <span>Cook: {meal.time_to_make}</span>}
+                  </div>
+
+                  <div className="flex flex-wrap gap-1 mb-4">
+                    {meal.tags?.slice(0, 3).map(tag => (
+                      <Badge key={tag} text={tag} color="green" />
+                    ))}
+                    {meal.tags?.length > 3 && <span className="text-[9px] font-bold text-text-disabled">+{meal.tags.length - 3}</span>}
+                  </div>
+                </div>
+
+                {/* Meta macro preview */}
+                {meal.nutrition && (
+                  <div className="grid grid-cols-3 gap-2 border-t border-neutral-100 py-2.5 mb-2">
+                    <div className="text-center">
+                      <div className="text-body-sm font-bold text-text-headings leading-none">{meal.nutrition.calories_cal || '-'}</div>
+                      <div className="text-[9px] uppercase text-text-disabled font-bold tracking-wider mt-0.5">Kcal</div>
+                    </div>
+                    <div className="text-center border-x border-neutral-100">
+                      <div className="text-body-sm font-bold text-emerald-600 leading-none">{meal.nutrition.protein_g || '-'}g</div>
+                      <div className="text-[9px] uppercase text-text-disabled font-bold tracking-wider mt-0.5">Protein</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-body-sm font-bold text-text-headings leading-none">{meal.nutrition.total_fat_g || '-'}g</div>
+                      <div className="text-[9px] uppercase text-text-disabled font-bold tracking-wider mt-0.5">Fat</div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="border-t border-border-primary pt-3 flex gap-2">
+                  <button
+                    onClick={() => { setSelectedMeal(meal); setViewModalOpen(true) }}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2 border border-neutral-200 rounded-lg text-body-xs font-bold text-text-body bg-neutral-50 hover:bg-neutral-100 transition-colors"
+                  >
+                    <IconEye /> View Meal
+                  </button>
+                  <button
+                    onClick={() => handleDelete(meal.id)}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2 border border-error-200 rounded-lg text-body-xs font-bold text-error-600 bg-rose-50 hover:bg-rose-100 transition-colors"
+                  >
+                    <IconArchive /> Delete Meal
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── MASTER MEAL CREATION MODAL ── */}
+      {modalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-900/70 backdrop-blur-sm">
+          <div className="bg-white w-full max-w-4xl max-h-[90vh] rounded-2xl shadow-2xl border border-border-primary flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 duration-300">
+
+            <div className="p-6 border-b border-border-primary bg-neutral-50 flex justify-between items-center">
+              <div>
+                <h3 className="text-heading-h6 font-bold text-text-headings flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-round bg-emerald-500" />
+                  Create Master Meal Profile
+                </h3>
+                <p className="text-body-sm text-text-disabled font-normal mt-0.5">Specify catalog dimensions including full macros, ingredients arrays, and instruction sequences.</p>
+              </div>
+              <button onClick={() => setModalOpen(false)} className="text-text-disabled hover:text-text-headings p-1">
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+
+            {/* Form Scroll Block */}
+            <div className="flex-1 overflow-y-auto p-6">
+              <form id="meal-admin-form" onSubmit={handleSubmit} className="space-y-6 text-left">
+
+                {/* Core Properties */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="md:col-span-2">
+                    <label className="block text-body-sm font-bold text-text-headings mb-1.5 uppercase tracking-wide">Meal Name *</label>
+                    <input required value={form.title} onChange={e => setForm({ ...form, title: e.target.value })}
+                      className="w-full border border-neutral-300 rounded-lg px-4 py-2.5 text-body-md font-bold focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 outline-none transition-all"
+                      placeholder="e.g. Grilled Chicken Breast with Roasted Asparagus" />
+                  </div>
+
+                  <div>
+                    <label className="block text-body-sm font-bold text-text-headings mb-1.5 uppercase tracking-wide">Serving Count *</label>
+                    <input type="number" required min="1" value={form.servings} onChange={e => setForm({ ...form, servings: e.target.value })}
+                      className="w-full border border-neutral-300 rounded-lg px-4 py-2.5 text-body-md" />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-body-sm font-bold text-text-headings mb-1.5 uppercase tracking-wide">Prep Interval</label>
+                      <input value={form.prep_time} onChange={e => setForm({ ...form, prep_time: e.target.value })}
+                        className="w-full border border-neutral-300 rounded-lg px-3 py-2.5 text-body-sm" placeholder="e.g. 15 mins" />
+                    </div>
+                    <div>
+                      <label className="block text-body-sm font-bold text-text-headings mb-1.5 uppercase tracking-wide">Cook Interval</label>
+                      <input value={form.time_to_make} onChange={e => setForm({ ...form, time_to_make: e.target.value })}
+                        className="w-full border border-neutral-300 rounded-lg px-3 py-2.5 text-body-sm" placeholder="e.g. 30 mins" />
+                    </div>
+                  </div>
+
+                  <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-body-sm font-bold text-text-headings mb-1.5 uppercase tracking-wide">Hero Raster URL</label>
+                      <input value={form.image_url} onChange={e => setForm({ ...form, image_url: e.target.value })}
+                        className="w-full border border-neutral-300 rounded-lg px-3 py-2 text-xs font-mono" placeholder="https://cdn.img.com/meal.png" />
+                    </div>
+                    <div>
+                      <label className="block text-body-sm font-bold text-text-headings mb-1.5 uppercase tracking-wide">Raw Article Link</label>
+                      <input value={form.url} onChange={e => setForm({ ...form, url: e.target.value })}
+                        className="w-full border border-neutral-300 rounded-lg px-3 py-2 text-xs font-mono" placeholder="https://myblog.com/recipe" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Macro Blocks - Nested */}
+                <div>
+                  <h4 className="text-body-sm font-bold text-emerald-700 border-b border-emerald-100 pb-2 mb-3 uppercase tracking-wider">Core Diagnostic Nutrition (Per Serving)</h4>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    <div>
+                      <label className="text-[10px] font-bold text-text-disabled block mb-1 uppercase">Calories (kCal)</label>
+                      <input type="number" value={form.calories_cal} onChange={e => setForm({ ...form, calories_cal: e.target.value })} className="w-full border border-neutral-300 rounded px-2 py-1.5 text-body-sm" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-text-disabled block mb-1 uppercase">Energy (kJ)</label>
+                      <input type="number" value={form.kilojoules_kj} onChange={e => setForm({ ...form, kilojoules_kj: e.target.value })} className="w-full border border-neutral-300 rounded px-2 py-1.5 text-body-sm" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-emerald-600 block mb-1 uppercase">Protein (g)</label>
+                      <input type="number" step="0.1" value={form.protein_g} onChange={e => setForm({ ...form, protein_g: e.target.value })} className="w-full border border-neutral-300 rounded px-2 py-1.5 text-body-sm" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-text-headings block mb-1 uppercase">Fat (Total g)</label>
+                      <input type="number" step="0.1" value={form.total_fat_g} onChange={e => setForm({ ...form, total_fat_g: e.target.value })} className="w-full border border-neutral-300 rounded px-2 py-1.5 text-body-sm" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-text-disabled block mb-1 uppercase">Carbs (g)</label>
+                      <input type="number" step="0.1" value={form.carbohydrates_g} onChange={e => setForm({ ...form, carbohydrates_g: e.target.value })} className="w-full border border-neutral-300 rounded px-2 py-1.5 text-body-sm" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-text-disabled block mb-1 uppercase">Sugars (g)</label>
+                      <input type="number" step="0.1" value={form.sugar_g} onChange={e => setForm({ ...form, sugar_g: e.target.value })} className="w-full border border-neutral-300 rounded px-2 py-1.5 text-body-sm" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-text-disabled block mb-1 uppercase">Fibre (g)</label>
+                      <input type="number" step="0.1" value={form.dietary_fibre_g} onChange={e => setForm({ ...form, dietary_fibre_g: e.target.value })} className="w-full border border-neutral-300 rounded px-2 py-1.5 text-body-sm" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-rose-600 block mb-1 uppercase">Sodium (mg)</label>
+                      <input type="number" step="0.1" value={form.sodium_mg} onChange={e => setForm({ ...form, sodium_mg: e.target.value })} className="w-full border border-neutral-300 rounded px-2 py-1.5 text-body-sm" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Metadata Lists */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="md:col-span-2">
+                    <label className="block text-body-sm font-bold text-text-headings mb-1.5 uppercase tracking-wide">Target Catalog Tags <span className="text-xs font-normal lowercase">(Comma sep)</span></label>
+                    <input value={form.tags_str} onChange={e => setForm({ ...form, tags_str: e.target.value })}
+                      className="w-full border border-neutral-300 rounded-lg px-3 py-2 text-body-sm" placeholder="vegan, high-protein, keto, low-sodium" />
+                  </div>
+
+                  <div>
+                    <label className="block text-body-sm font-bold text-text-headings mb-1.5 uppercase tracking-wide">Constituent Ingredients <span className="text-xs font-normal lowercase">(One entry per line)</span></label>
+                    <textarea rows="6" value={form.ingredients_str} onChange={e => setForm({ ...form, ingredients_str: e.target.value })}
+                      className="w-full border border-neutral-300 rounded-lg px-3 py-2.5 text-body-sm font-mono" placeholder="200g Skinless Chicken Breast&#10;1 tbsp Extra Virgin Olive Oil" />
+                  </div>
+
+                  <div>
+                    <label className="block text-body-sm font-bold text-text-headings mb-1.5 uppercase tracking-wide">Preparation Pipelines <span className="text-xs font-normal lowercase">(One step per line)</span></label>
+                    <textarea rows="6" value={form.instructions_str} onChange={e => setForm({ ...form, instructions_str: e.target.value })}
+                      className="w-full border border-neutral-300 rounded-lg px-3 py-2.5 text-body-sm" placeholder="Step 1: Preheat oven to 200C&#10;Step 2: Season and grill" />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-body-sm font-bold text-text-headings mb-1.5 uppercase tracking-wide">Guide Overview</label>
+                    <textarea rows="2" value={form.guide_info} onChange={e => setForm({ ...form, guide_info: e.target.value })}
+                      className="w-full border border-neutral-300 rounded-lg px-3 py-2 text-body-sm" placeholder="Quick overview or nutritional notes about this master meal setup." />
+                  </div>
+                </div>
+
+              </form>
+            </div>
+
+            {/* Modal Controls */}
+            <div className="p-6 border-t border-border-primary bg-neutral-50 flex justify-end gap-3">
+              <button onClick={() => setModalOpen(false)} className="px-5 py-2.5 border border-border-primary rounded-lg font-bold text-text-body hover:bg-white transition-all">
+                Cancel Buffer
+              </button>
+              <button type="submit" form="meal-admin-form"
+                className="px-6 py-2.5 text-neutral-white bg-emerald-600 hover:bg-emerald-700 rounded-lg font-bold shadow-md transition-all">
+                Commit Master Node
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* ── MEAL DETAIL PREVIEW MODAL ── */}
+      {viewModalOpen && selectedMeal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-900/70 backdrop-blur-sm">
+          <div className="bg-white w-full max-w-2xl max-h-[90vh] rounded-2xl shadow-2xl border border-border-primary flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 duration-300">
+
+            {/* Hero Header */}
+            <div className="relative h-56 shrink-0 overflow-hidden bg-neutral-100">
+              {selectedMeal.image_url ? (
+                <img src={selectedMeal.image_url} className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-text-disabled font-bold bg-neutral-200 uppercase">NO PREVIEW</div>
+              )}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+              <button onClick={() => setViewModalOpen(false)} className="absolute top-4 right-4 bg-black/40 text-white hover:bg-black/60 p-2 rounded-full transition-all">
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+              <div className="absolute bottom-5 left-6 right-6 flex flex-col items-start">
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {selectedMeal.tags?.map(t => <Badge key={t} text={t} color="green" />)}
+                </div>
+                <h2 className="text-heading-h5 font-bold text-white leading-tight">{selectedMeal.title}</h2>
+              </div>
+            </div>
+
+            {/* Scroll Body */}
+            <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-6">
+
+              {/* Core Metrics */}
+              <div className="grid grid-cols-3 bg-neutral-50 border border-border-primary rounded-xl p-4 divide-x divide-border-primary text-center">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-text-disabled mb-0.5">Servings</p>
+                  <p className="text-body-md font-bold text-text-headings">{selectedMeal.servings} People</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-text-disabled mb-0.5">Prep Time</p>
+                  <p className="text-body-md font-bold text-text-headings">{selectedMeal.prep_time || '-'}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-text-disabled mb-0.5">Cook Time</p>
+                  <p className="text-body-md font-bold text-text-headings">{selectedMeal.time_to_make || '-'}</p>
+                </div>
+              </div>
+
+              {/* Optional Macro Grid */}
+              {selectedMeal.nutrition && (
+                <div>
+                  <h4 className="text-body-sm font-bold text-text-headings mb-2 uppercase tracking-wide text-left">Macro Breakdown (Per serving)</h4>
+                  <div className="grid grid-cols-4 gap-2.5">
+                    <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-3 text-center">
+                      <p className="text-body-lg font-black text-emerald-700 leading-none">{selectedMeal.nutrition.calories_cal || '-'}</p>
+                      <p className="text-[9px] font-bold text-emerald-600/80 uppercase mt-1">Kcal</p>
+                    </div>
+                    <div className="bg-neutral-50 border border-border-primary rounded-lg p-3 text-center">
+                      <p className="text-body-lg font-black text-text-headings leading-none">{selectedMeal.nutrition.protein_g || '-'}g</p>
+                      <p className="text-[9px] font-bold text-text-disabled uppercase mt-1">Protein</p>
+                    </div>
+                    <div className="bg-neutral-50 border border-border-primary rounded-lg p-3 text-center">
+                      <p className="text-body-lg font-black text-text-headings leading-none">{selectedMeal.nutrition.carbohydrates_g || '-'}g</p>
+                      <p className="text-[9px] font-bold text-text-disabled uppercase mt-1">Carbs</p>
+                    </div>
+                    <div className="bg-neutral-50 border border-border-primary rounded-lg p-3 text-center">
+                      <p className="text-body-lg font-black text-text-headings leading-none">{selectedMeal.nutrition.total_fat_g || '-'}g</p>
+                      <p className="text-[9px] font-bold text-text-disabled uppercase mt-1">Fat</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Guide Info */}
+              {selectedMeal.guide_info && (
+                <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 text-body-sm text-blue-800 text-left">
+                  <strong className="block text-[10px] uppercase tracking-wider mb-1 text-blue-900">Guide Overview</strong>
+                  {selectedMeal.guide_info}
+                </div>
+              )}
+
+              {/* Ingredients Array */}
+              {selectedMeal.ingredients && selectedMeal.ingredients.length > 0 && (
+                <div className="border-t border-neutral-100 pt-5 text-left">
+                  <h4 className="text-body-sm font-bold text-text-headings mb-2.5 uppercase tracking-wide">Required Ingredients</h4>
+                  <ul className="space-y-2">
+                    {selectedMeal.ingredients.map((ing, i) => (
+                      <li key={i} className="flex items-center gap-2 text-body-sm text-text-body">
+                        <div className="w-1.5 h-1.5 rounded-round bg-emerald-500 shrink-0" />
+                        {ing}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Instructions Array */}
+              {selectedMeal.instructions && selectedMeal.instructions.length > 0 && (
+                <div className="border-t border-neutral-100 pt-5 text-left">
+                  <h4 className="text-body-sm font-bold text-text-headings mb-2.5 uppercase tracking-wide">Preparation Pipeline</h4>
+                  <ol className="space-y-3.5">
+                    {selectedMeal.instructions.map((step, i) => (
+                      <li key={i} className="flex gap-3 text-body-sm text-text-body items-start">
+                        <span className="flex items-center justify-center w-5 h-5 rounded-round bg-emerald-100 text-emerald-700 font-bold text-[10px] mt-0.5 shrink-0">{i + 1}</span>
+                        <span>{step}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              )}
+
+            </div>
+
+            {/* Footer Control */}
+            <div className="p-5 border-t border-border-primary bg-neutral-50 flex justify-end">
+              <button onClick={() => setViewModalOpen(false)} className="px-6 py-2 text-body-sm font-bold text-text-body border border-border-primary hover:bg-white bg-neutral-50 rounded-lg transition-all">
+                Dismiss Details
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+      {/* ── CONFIRM DIALOG MODAL ── */}
+      {confirmDialog && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-neutral-900/80 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-border-primary overflow-hidden animate-in zoom-in-95 duration-200 text-left">
+            <div className="p-6">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="p-2.5 bg-rose-50 rounded-full text-error-600 flex-shrink-0">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                </div>
+                <h3 className="text-heading-h6 font-bold text-text-headings">{confirmDialog.title}</h3>
+              </div>
+              <p className="text-body-sm text-text-body font-medium leading-relaxed">{confirmDialog.message}</p>
+            </div>
+            <div className="px-6 py-4 bg-neutral-50 border-t border-border-primary flex justify-end gap-3">
+              <button onClick={() => setConfirmDialog(null)} className="px-4 py-2 text-body-sm font-bold text-text-body hover:bg-white bg-neutral-50 border border-border-primary rounded-lg transition-all">
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  confirmDialog.onConfirm()
+                  setConfirmDialog(null)
+                }}
+                className="px-5 py-2 text-body-sm font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg transition-all shadow-md shadow-rose-600/10"
+              >
+                Destroy Meal Node
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── ERROR ALERT MODAL ── */}
+      {errorAlert && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-neutral-900/80 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-border-primary overflow-hidden animate-in zoom-in-95 duration-200 text-left">
+            <div className="p-6">
+              <div className="flex items-center gap-3 mb-3 text-error-600">
+                <div className="p-2.5 bg-rose-50 rounded-full flex-shrink-0">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                </div>
+                <h3 className="text-heading-h6 font-bold text-text-headings">{errorAlert.title}</h3>
+              </div>
+              <p className="text-body-sm text-text-body font-medium leading-relaxed">{errorAlert.message}</p>
+            </div>
+            <div className="px-6 py-4 bg-neutral-50 border-t border-border-primary flex justify-end">
+              <button onClick={() => setErrorAlert(null)} className="px-5 py-2 text-body-sm font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg transition-all">
+                Dismiss Dialog
+              </button>
+            </div>
           </div>
         </div>
       )}
