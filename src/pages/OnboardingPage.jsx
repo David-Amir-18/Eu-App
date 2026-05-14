@@ -1,7 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Button } from '../components/atoms/Button'
-import { Field } from '../components/atoms/Field'
+import { Button } from '../components/atoms/Button.jsx'
+import { Field } from '../components/atoms/Field.jsx'
+import { DefinedField } from '../components/molecules/DefinedField.jsx'
+import { saveUserMetrics } from '../api/authService.js'
+import { getConditions, setMyCondition } from '../api/rehabService.js'
 
 const STEPS = ['welcome', 'age', 'weight', 'height', 'illness', 'done']
 const METRIC_STEPS = ['age', 'weight', 'height', 'illness']
@@ -61,6 +64,11 @@ export default function OnboardingPage() {
   const [step, setStep] = useState('welcome')
   const [form, setForm] = useState({ age: '', weight: '', height: '', illness: '' })
   const [error, setError] = useState('')
+  const [conditions, setConditions] = useState([])
+
+  useEffect(() => {
+    getConditions().then(data => setConditions(data || [])).catch(() => {})
+  }, [])
 
   function next() {
     setError('')
@@ -92,9 +100,37 @@ export default function OnboardingPage() {
     next()
   }
 
-  function finish() {
-    // TODO: send form data to backend when endpoint is ready
-    navigate('/dashboard')
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
+
+  async function finish() {
+    const userId = localStorage.getItem('user_id')
+    if (!userId) { navigate('/dashboard'); return }
+
+    setSaving(true)
+    setSaveError('')
+    try {
+      await saveUserMetrics({
+        age: Number(form.age),
+        weight: parseFloat(form.weight),
+        height: parseFloat(form.height),
+        primary_goal: 'General',
+        fitness_level: 'Beginner',
+        activity_level: 'Sedentary',
+      })
+      if (form.illness) {
+        await setMyCondition({
+          condition_id: form.illness,
+          injury_details: "Added during onboarding",
+          recovery_stage: "acute"
+        })
+      }
+      navigate('/dashboard')
+    } catch (err) {
+      setSaveError(err.message || 'Failed to save profile. Please try again.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -201,16 +237,19 @@ export default function OnboardingPage() {
             <ProgressDots current="illness" />
             <div>
               <p className="text-body-sm text-text-disabled font-semibold uppercase tracking-widest mb-2">Step 4 of 4</p>
-              <h2 className="text-heading-h3 font-bold text-text-headings mb-2">Any health conditions?</h2>
+              <h2 className="text-heading-h3 font-bold text-text-headings mb-2">Any rehab condition?</h2>
               <p className="text-body-md text-text-body">
                 Completely optional — helps us adjust recommendations for you.
               </p>
             </div>
-            <Field
-              id="illness" name="illness"
-              placeholder="e.g. diabetes, hypertension, asthma..."
-              helperText="Optional — leave blank if none"
-              value={form.illness} onChange={handleChange}
+            <DefinedField
+              id="illness"
+              value={form.illness}
+              onChange={(val) => setForm(prev => ({ ...prev, illness: val }))}
+              options={[
+                { value: '', label: 'None (General Fitness)' },
+                ...conditions.map(c => ({ value: c.id, label: c.name }))
+              ]}
             />
             <div className="flex gap-3">
               <Button variant="ghost" onClick={back} className="flex-1">Back</Button>
@@ -231,7 +270,7 @@ export default function OnboardingPage() {
                 { label: 'Age', value: `${form.age} years` },
                 { label: 'Weight', value: `${form.weight} kg` },
                 { label: 'Height', value: `${form.height} cm` },
-                { label: 'Health conditions', value: form.illness || 'None' },
+                { label: 'Rehab Condition', value: form.illness ? (conditions.find(c => c.id === form.illness)?.name || 'Yes') : 'None' },
               ].map(({ label, value }) => (
                 <div key={label} className="flex items-center justify-between px-4 py-3 rounded-xl bg-neutral-100">
                   <span className="text-body-sm text-text-disabled font-semibold">{label}</span>
@@ -239,7 +278,10 @@ export default function OnboardingPage() {
                 </div>
               ))}
             </div>
-            <Button size="lg" fullWidth onClick={finish} className="mt-2">
+            {saveError && (
+              <p className="text-body-sm text-text-error">{saveError}</p>
+            )}
+            <Button size="lg" fullWidth loading={saving} onClick={finish} className="mt-2">
               Go to dashboard
             </Button>
           </div>

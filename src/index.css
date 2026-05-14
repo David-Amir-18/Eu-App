@@ -91,6 +91,7 @@
   --color-smoky-rose-600: #423535;
   --color-smoky-rose-700: #211a1a;
   
+  /* Rehab */
   --color-blackberry-100: #d5ccd6;
   --color-blackberry-200: #ac9aaf;
   --color-blackberry-300: #826886;
@@ -107,6 +108,7 @@
   --color-ash-600: #5c6357;
   --color-ash-700: #2e312b;
   
+  /* Workout */
   --color-sandy-flame-100: #fee6d3;
   --color-sandy-flame-200: #fecfa7;
   --color-sandy-flame-300: #fdb67b;
@@ -123,6 +125,7 @@
   --color-imperial-blue-600: #151539;
   --color-imperial-blue-700: #030307;
   
+  /* Meals */
   --color-fern-100: #d4dfd5;
   --color-fern-200: #abc1ac;
   --color-fern-300: #80a183;
@@ -236,6 +239,63 @@
   --color-icon-on-action: #ffffff;
   --color-icon-on-disabled: #000000;
   
+  /* ===== PLAN TYPE ALIASES ===== */
+  /* Meals — maps to fern (primary) + custard (secondary) */
+  --color-meals-prim-100: var(--color-fern-100);
+  --color-meals-prim-200: var(--color-fern-200);
+  --color-meals-prim-300: var(--color-fern-300);
+  --color-meals-prim:     var(--color-fern-default);
+  --color-meals-prim-500: var(--color-fern-500);
+  --color-meals-prim-600: var(--color-fern-600);
+  --color-meals-prim-700: var(--color-fern-700);
+
+  --color-meals-sec-100: var(--color-custard-100);
+  --color-meals-sec-200: var(--color-custard-200);
+  --color-meals-sec-300: var(--color-custard-300);
+  --color-meals-sec:     var(--color-custard-default);
+  --color-meals-sec-500: var(--color-custard-500);
+  --color-meals-sec-600: var(--color-custard-600);
+  --color-meals-sec-700: var(--color-custard-700);
+
+  /* Workout — maps to sandy-flame (primary) + imperial-blue (secondary) */
+  --color-workout-prim-100: var(--color-sandy-flame-100);
+  --color-workout-prim-200: var(--color-sandy-flame-200);
+  --color-workout-prim-300: var(--color-sandy-flame-300);
+  --color-workout-prim:     var(--color-sandy-flame-default);
+  --color-workout-prim-500: var(--color-sandy-flame-500);
+  --color-workout-prim-600: var(--color-sandy-flame-600);
+  --color-workout-prim-700: var(--color-sandy-flame-700);
+
+  --color-workout-sec-100: var(--color-imperial-blue-100);
+  --color-workout-sec-200: var(--color-imperial-blue-200);
+  --color-workout-sec-300: var(--color-imperial-blue-300);
+  --color-workout-sec:     var(--color-imperial-blue-default);
+  --color-workout-sec-500: var(--color-imperial-blue-500);
+  --color-workout-sec-600: var(--color-imperial-blue-600);
+  --color-workout-sec-700: var(--color-imperial-blue-700);
+
+  /* Rehab — maps to blackberry (primary) + ash (secondary) */
+  --color-rehab-prim-100: var(--color-blackberry-100);
+  --color-rehab-prim-200: var(--color-blackberry-200);
+  --color-rehab-prim-300: var(--color-blackberry-300);
+  --color-rehab-prim:     var(--color-blackberry-default);
+  --color-rehab-prim-500: var(--color-blackberry-500);
+  --color-rehab-prim-600: var(--color-blackberry-600);
+  --color-rehab-prim-700: var(--color-blackberry-700);
+
+  --color-rehab-sec-100: var(--color-ash-100);
+  --color-rehab-sec-200: var(--color-ash-200);
+  --color-rehab-sec-300: var(--color-ash-300);
+  --color-rehab-sec:     var(--color-ash-default);
+  --color-rehab-sec-500: var(--color-ash-500);
+  --color-rehab-sec-600: var(--color-ash-600);
+  --color-rehab-sec-700: var(--color-ash-700);
+
+  /* Plan type gradients */
+  --gradient-meals:   linear-gradient(135deg, var(--color-fern-default) 0%, var(--color-custard-default) 100%);
+  --gradient-workout: linear-gradient(135deg, var(--color-sandy-flame-default) 0%, var(--color-imperial-blue-default) 100%);
+  --gradient-rehab:   linear-gradient(135deg, var(--color-blackberry-default) 0%, var(--color-ash-default) 100%);
+
   /* ===== SPACING ===== */
   --space-3xs: 0.125rem;
   --space-2xs: 0.25rem;
@@ -342,5 +402,33 @@
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+  }
+
+  @keyframes pureFadeIn {
+    0% {
+      opacity: 0;
+    }
+    100% {
+      opacity: 1;
+    }
+  }
+
+  @keyframes fadeSlideUp {
+    0% {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .animate-fade-in {
+    animation: pureFadeIn 0.5s ease-out forwards;
+  }
+
+  .animate-fade-slide-up {
+    animation: fadeSlideUp 0.6s ease-out forwards;
   }
 }
