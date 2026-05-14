@@ -8,6 +8,7 @@ import { DefinedField } from '../components/molecules/DefinedField.jsx'
 import { getExercises } from '../api/exercisesService.js'
 import { createWorkoutPlan, createRoutine, addExerciseToRoutine as apiAddExerciseToRoutine } from '../api/workoutsService.js'
 import { getMeals, getMealFilterOptions, createMealPlan, addMealSlot } from '../api/mealPlansService.js'
+import { getConditions, getRehabExercises, createRehabPlan, createRehabRoutine, addExerciseToRehabRoutine } from '../api/rehabService.js'
 
 // ── Icons ──────────────────────────────────────────────────────────────────────
 function IconWorkout() {
@@ -169,7 +170,7 @@ export default function CreatePlanPage() {
   const [routineForDayAssign, setRoutineForDayAssign] = useState(null)
   const [showExerciseConfigModal, setShowExerciseConfigModal] = useState(false)
   const [pendingExercise, setPendingExercise] = useState(null)
-  const [exerciseConfig, setExerciseConfig] = useState({ sets: '', reps: '', weight_kg: '', rest_time_seconds: '' })
+  const [exerciseConfig, setExerciseConfig] = useState({ sets: '', reps: '', weight_kg: '', rest_time_seconds: '', hold_time_seconds: '' })
 
   // Modal exercise filter state
   const [modalMuscleGroup, setModalMuscleGroup] = useState('all')
@@ -204,20 +205,41 @@ export default function CreatePlanPage() {
   useEffect(() => {
     if (!showExerciseSearchModal || !activeRoutineId) return
     setExerciseSearchLoading(true)
-    getExercises({
-      page: 1,
-      pageSize: 50,
-      search: exerciseSearchQuery || undefined,
-      equipmentCategory: hundredPercentBodyweight ? 'none' : undefined,
-      exerciseType: modalExerciseType !== 'all' ? modalExerciseType : undefined,
-      muscleGroup: modalMuscleGroup !== 'all' ? modalMuscleGroup : undefined,
-    })
-      .then((data) => {
-        setAvailableExercises(data.items || [])
+    
+    if (type === 'rehab') {
+      getRehabExercises()
+        .then((data) => {
+          let filtered = data || []
+          if (exerciseSearchQuery) {
+            const q = exerciseSearchQuery.toLowerCase()
+            filtered = filtered.filter(e => e.title?.toLowerCase().includes(q) || e.muscles_involved?.some(m => m.toLowerCase().includes(q)))
+          }
+          setAvailableExercises(filtered.map(e => ({
+            id: e.id,
+            title: e.title,
+            thumbnail_url: e.thumbnail_url || e.image_url || null,
+            muscle_group: (e.muscles_involved && e.muscles_involved.length > 0) ? e.muscles_involved[0] : 'Rehab',
+            equipment_category: (e.categories && e.categories.length > 0) ? e.categories[0] : 'General'
+          })))
+        })
+        .catch(err => console.error(err))
+        .finally(() => setExerciseSearchLoading(false))
+    } else {
+      getExercises({
+        page: 1,
+        pageSize: 50,
+        search: exerciseSearchQuery || undefined,
+        equipmentCategory: hundredPercentBodyweight ? 'none' : undefined,
+        exerciseType: modalExerciseType !== 'all' ? modalExerciseType : undefined,
+        muscleGroup: modalMuscleGroup !== 'all' ? modalMuscleGroup : undefined,
       })
-      .catch(err => console.error(err))
-      .finally(() => setExerciseSearchLoading(false))
-  }, [showExerciseSearchModal, exerciseSearchQuery, hundredPercentBodyweight, activeRoutineId, modalMuscleGroup, modalExerciseType])
+        .then((data) => {
+          setAvailableExercises(data.items || [])
+        })
+        .catch(err => console.error(err))
+        .finally(() => setExerciseSearchLoading(false))
+    }
+  }, [showExerciseSearchModal, exerciseSearchQuery, hundredPercentBodyweight, activeRoutineId, modalMuscleGroup, modalExerciseType, type])
 
   // Meal search — fires whenever the modal is open or filters change
   useEffect(() => {
@@ -255,6 +277,10 @@ export default function CreatePlanPage() {
 
 
   // Rehab State
+  const [conditions, setConditions] = useState([])
+  useEffect(() => {
+    getConditions().then(data => setConditions(data || [])).catch(() => {})
+  }, [])
   const [injury, setInjury] = useState(draftData?.rawInjury || '')
   const [rehabDays, setRehabDays] = useState(draftData?.rawRehabDays || ['Mon', 'Tue', 'Thu', 'Fri'])
 
@@ -373,6 +399,7 @@ export default function CreatePlanPage() {
             reps: exerciseConfig.reps ? Number(exerciseConfig.reps) : null,
             weight_kg: exerciseConfig.weight_kg ? Number(exerciseConfig.weight_kg) : null,
             rest_time_seconds: exerciseConfig.rest_time_seconds ? Number(exerciseConfig.rest_time_seconds) : null,
+            hold_time_seconds: exerciseConfig.hold_time_seconds ? Number(exerciseConfig.hold_time_seconds) : null,
           }
         ]
       }
@@ -594,6 +621,55 @@ export default function CreatePlanPage() {
         return
       } catch (error) {
         setValidationMessage(error.message || 'Failed to save meal plan to server.')
+        setShowValidationModal(true)
+        return
+      }
+    }
+
+    if (type === 'rehab') {
+      if (routines.length === 0) {
+        setValidationMessage('Please create at least one routine before saving your rehab plan.')
+        setShowValidationModal(true)
+        return
+      }
+      try {
+        const createdPlan = await createRehabPlan({
+          title: name.trim(),
+          description: `Rehab protocol for ${level}`,
+          condition_id: injury || null,
+        })
+
+        for (const [routineIndex, routine] of routines.entries()) {
+          const days = routine.assignedDays || []
+          // For rehab, we might want to create a single routine, but we don't have day_of_week in the schema.
+          // The schema has `order_index`. We'll just create the routine.
+          const createdRoutine = await createRehabRoutine(createdPlan.id, {
+            name: routine.name,
+            order_index: routineIndex,
+          })
+          
+          for (const [pos, ex] of (routine.exercises || []).entries()) {
+            await addExerciseToRehabRoutine(createdRoutine.id, {
+              exercise_id: ex.exercise_id,
+              sets: ex.sets ?? null,
+              reps: ex.reps ?? null,
+              hold_time_seconds: ex.hold_time_seconds ?? null,
+              rest_seconds: ex.rest_time_seconds ?? null,
+              order_index: pos,
+              notes: ""
+            })
+          }
+        }
+
+        const existing = localStorage.getItem('user_plans')
+        let plans = existing ? JSON.parse(existing) : []
+        if (draftData?.id) plans = plans.filter(p => p.id !== draftData.id)
+        plans.push({ ...newPlan, id: createdPlan.id, backendId: createdPlan.id })
+        localStorage.setItem('user_plans', JSON.stringify(plans))
+        navigate(`/plans/rehab/${createdPlan.id}`)
+        return
+      } catch (error) {
+        setValidationMessage(error.message || 'Failed to save rehab plan to server.')
         setShowValidationModal(true)
         return
       }
@@ -944,7 +1020,16 @@ export default function CreatePlanPage() {
               {type === 'rehab' && (
                 <div className="flex flex-col gap-8">
                   <div className="flex flex-col gap-2">
-                    <Field id="injury" name="injury" label="Target Injury / Area" placeholder="e.g., ACL Recovery, Lower Back Pain" value={injury} onChange={e => setInjury(e.target.value)} />
+                    <DefinedField
+                      id="injury"
+                      label="Target Injury / Condition"
+                      value={injury}
+                      onChange={setInjury}
+                      options={[
+                        { value: '', label: 'None (General Rehab)' },
+                        ...conditions.map(c => ({ value: c.id, label: c.name }))
+                      ]}
+                    />
                   </div>
 
                   <div className="flex flex-col gap-2">
@@ -952,22 +1037,82 @@ export default function CreatePlanPage() {
                     <ToggleGroup options={DAYS} selected={rehabDays} onChange={setRehabDays} activeColor="bg-rehab-prim" />
                   </div>
 
-                  {/* Day Blocks */}
-                  {rehabDays.length > 0 && (
-                    <div className="flex flex-col gap-3 mt-4">
-                      <label className="text-body-sm font-semibold text-text-headings">Protocol Structure</label>
-                      {DAYS.filter(d => rehabDays.includes(d)).map(day => (
-                        <div key={day} className="flex items-center gap-4 p-4 rounded-xl border border-border-primary bg-surface-primary">
-                          <span className="w-10 text-body-md font-bold text-rehab-prim">{day}</span>
-                          <div className="flex-1 border-l border-border-primary pl-4">
-                            <button className="text-body-sm font-semibold text-text-disabled border border-dashed border-border-primary rounded-lg px-4 py-2 w-full text-left hover:bg-neutral-100 transition-colors">
-                              + Add Rehab Module
-                            </button>
-                          </div>
-                        </div>
-                      ))}
+                  {/* Routine Builder */}
+                  <div className="flex flex-col gap-4 mt-4">
+                    <div className="flex justify-between items-center border-b border-border-primary pb-3">
+                      <div>
+                        <label className="text-body-sm font-bold text-text-headings">Rehab Routines</label>
+                        <p className="text-body-sm text-text-disabled mt-0.5">Create routines, assign them to days, and add exercises.</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={openCreateRoutineModal}
+                        className="text-body-xs font-bold text-rehab-prim bg-rehab-prim/10 hover:bg-rehab-prim/20 px-4 py-2 rounded-xl transition-colors shrink-0"
+                      >
+                        + Create Routine
+                      </button>
                     </div>
-                  )}
+
+                    {routines.length > 0 ? (
+                      <div className="flex flex-col gap-3">
+                        {routines.map((routine) => (
+                          <div key={routine.id} className="p-4 rounded-2xl border border-border-primary bg-surface-primary shadow-sm flex flex-col gap-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <h4 className="text-body-md font-bold text-text-headings">{routine.name}</h4>
+                                <p className="text-body-sm text-text-disabled">
+                                  {(routine.assignedDays || []).length} assigned day(s) · {(routine.exercises || []).length} exercise(s)
+                                </p>
+                              </div>
+                              <div className="flex gap-2">
+                                <Button type="button" variant="ghost" size="sm" onClick={() => openEditRoutineModal(routine)}>Edit</Button>
+                                <Button type="button" variant="ghost" size="sm" onClick={() => removeRoutine(routine.id)} className="text-text-error">Delete</Button>
+                              </div>
+                            </div>
+
+                            <div className="flex flex-wrap gap-2">
+                              {(routine.assignedDays || []).length > 0 ? (
+                                routine.assignedDays.map(day => (
+                                  <span key={day} className="px-2.5 py-1 rounded-lg text-body-sm font-semibold bg-rehab-prim/10 text-rehab-prim">{day}</span>
+                                ))
+                              ) : (
+                                <span className="text-body-sm text-text-disabled">No days assigned yet.</span>
+                              )}
+                            </div>
+
+                            {(routine.exercises || []).length > 0 && (
+                              <div className="flex flex-col gap-2">
+                                {routine.exercises.map((ex, index) => (
+                                  <div key={ex.exercise_id} className="flex items-center justify-between px-3 py-2 rounded-xl bg-surface-primary border border-border-primary">
+                                    <span className="text-body-sm font-semibold text-text-headings">{index + 1}. {ex.title}</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => removeExerciseFromRoutine(routine.id, ex.exercise_id)}
+                                      className="text-text-disabled hover:text-text-error transition-colors p-1"
+                                    >
+                                      <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            <div className="flex flex-wrap gap-2">
+                              <Button type="button" variant="outline" size="sm" onClick={() => openAssignDays(routine.id)}>Assign Week Days</Button>
+                              <Button type="button" variant="rehab-primary" size="sm" onClick={() => openExerciseSearchForRoutine(routine.id)}>Add Exercises</Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="py-8 text-center border-2 border-dashed border-border-primary rounded-2xl bg-neutral-100">
+                        <p className="text-body-md font-semibold text-text-disabled mb-1">No Routines Added Yet</p>
+                        <Button type="button" variant="outline" size="sm" onClick={openCreateRoutineModal}>
+                          Create First Routine
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </section>
@@ -1374,49 +1519,51 @@ export default function CreatePlanPage() {
                   placeholder="Search exercises..."
                   value={exerciseSearchQuery}
                   onChange={e => setExerciseSearchQuery(e.target.value)}
-                  className="w-full bg-surface-primary border border-border-primary rounded-xl pl-11 pr-4 py-2 text-body-md text-text-body focus:outline-none focus:border-workout-prim shadow-sm transition-all"
+                  className={`w-full bg-surface-primary border border-border-primary rounded-xl pl-11 pr-4 py-2 text-body-md text-text-body focus:outline-none focus:border-${type === 'rehab' ? 'rehab' : 'workout'}-prim shadow-sm transition-all`}
                 />
                 <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-text-disabled absolute left-4 top-1/2 -translate-y-1/2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
               </div>
             </div>
 
             {/* Muscle group + exercise type filters */}
-            <div className="px-4 py-3 border-b border-border-primary bg-neutral-100 flex flex-col gap-2">
-              <div className="flex flex-wrap gap-1.5">
-                {MUSCLE_GROUP_OPTIONS.map(opt => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => setModalMuscleGroup(opt.value)}
-                    className={cn(
-                      'px-2.5 py-0.5 rounded-round text-body-sm font-semibold border transition-all',
-                      modalMuscleGroup === opt.value
-                        ? 'bg-workout-prim text-neutral-white border-transparent'
-                        : 'bg-surface-primary text-text-disabled border-border-primary hover:border-workout-prim hover:text-workout-prim'
-                    )}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
+            {type !== 'rehab' && (
+              <div className="px-4 py-3 border-b border-border-primary bg-neutral-100 flex flex-col gap-2">
+                <div className="flex flex-wrap gap-1.5">
+                  {MUSCLE_GROUP_OPTIONS.map(opt => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setModalMuscleGroup(opt.value)}
+                      className={cn(
+                        'px-2.5 py-0.5 rounded-round text-body-sm font-semibold border transition-all',
+                        modalMuscleGroup === opt.value
+                          ? 'bg-workout-prim text-neutral-white border-transparent'
+                          : 'bg-surface-primary text-text-disabled border-border-primary hover:border-workout-prim hover:text-workout-prim'
+                      )}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {EXERCISE_TYPE_OPTIONS.map(opt => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setModalExerciseType(opt.value)}
+                      className={cn(
+                        'px-2.5 py-0.5 rounded-round text-body-sm font-semibold border transition-all',
+                        modalExerciseType === opt.value
+                          ? 'bg-workout-prim-500 text-neutral-white border-transparent'
+                          : 'bg-surface-primary text-text-disabled border-border-primary hover:border-workout-prim hover:text-workout-prim'
+                      )}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <div className="flex flex-wrap gap-1.5">
-                {EXERCISE_TYPE_OPTIONS.map(opt => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => setModalExerciseType(opt.value)}
-                    className={cn(
-                      'px-2.5 py-0.5 rounded-round text-body-sm font-semibold border transition-all',
-                      modalExerciseType === opt.value
-                        ? 'bg-workout-prim-500 text-neutral-white border-transparent'
-                        : 'bg-surface-primary text-text-disabled border-border-primary hover:border-workout-prim hover:text-workout-prim'
-                    )}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </div>
+            )}
 
             <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2">
               {exerciseSearchLoading ? (
@@ -1431,22 +1578,48 @@ export default function CreatePlanPage() {
                     <div
                       key={ex.id}
                       onClick={() => {
-                        if (!isAdded) openExerciseConfig(ex)
+                        if (!isAdded) {
+                          if (type === 'rehab') {
+                            setRoutines(prev => prev.map(r => {
+                              if (r.id !== activeRoutineId) return r
+                              return {
+                                ...r,
+                                exercises: [
+                                  ...r.exercises,
+                                  {
+                                    exercise_id: ex.id,
+                                    title: ex.title,
+                                    thumbnail_url: ex.thumbnail_url || null,
+                                    sets: null, reps: null, weight_kg: null,
+                                    rest_time_seconds: null, hold_time_seconds: null,
+                                  }
+                                ]
+                              }
+                            }))
+                          } else {
+                            openExerciseConfig(ex)
+                          }
+                        }
                       }}
                       className={`flex items-center justify-between p-3.5 rounded-xl border transition-all cursor-pointer select-none ${
                         isAdded
-                          ? 'border-workout-prim bg-workout-prim-50/10'
-                          : 'border-border-primary bg-surface-primary hover:border-workout-prim/50'
+                          ? `border-${type === 'rehab' ? 'rehab' : 'workout'}-prim bg-${type === 'rehab' ? 'rehab' : 'workout'}-prim-50/10`
+                          : `border-border-primary bg-surface-primary hover:border-${type === 'rehab' ? 'rehab' : 'workout'}-prim/50`
                       }`}
                     >
-                      <div className="flex flex-col gap-0.5 text-left">
-                        <span className="text-body-sm font-bold text-text-headings">{ex.title}</span>
-                        <span className="text-[11px] text-text-disabled capitalize">
-                          {ex.muscle_group} · {ex.equipment_category}
-                        </span>
+                      <div className="flex items-center gap-3">
+                        {ex.thumbnail_url && (
+                          <img src={ex.thumbnail_url} alt={ex.title} className="w-16 h-16 rounded object-cover shrink-0 bg-neutral-100" />
+                        )}
+                        <div className="flex flex-col gap-0.5 text-left">
+                          <span className="text-body-sm font-bold text-text-headings">{ex.title}</span>
+                          <span className="text-[11px] text-text-disabled capitalize">
+                            {ex.muscle_group} · {ex.equipment_category}
+                          </span>
+                        </div>
                       </div>
                       <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all ${
-                        isAdded ? 'border-workout-prim bg-workout-prim text-neutral-white' : 'border-border-primary'
+                        isAdded ? `border-${type === 'rehab' ? 'rehab' : 'workout'}-prim bg-${type === 'rehab' ? 'rehab' : 'workout'}-prim text-neutral-white` : 'border-border-primary'
                       }`}>
                         {isAdded && (
                           <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 stroke-current" viewBox="0 0 24 24" fill="none" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
@@ -1468,7 +1641,7 @@ export default function CreatePlanPage() {
             <div className="border-t border-border-primary px-6 py-4 flex bg-surface-primary shrink-0 rounded-b-3xl">
               <Button
                 type="button"
-                variant="workout-primary"
+                variant={type === 'rehab' ? 'rehab-primary' : 'workout-primary'}
                 className="w-full shadow-md"
                 onClick={() => setShowExerciseSearchModal(false)}
               >
@@ -1492,7 +1665,8 @@ export default function CreatePlanPage() {
         <div className="grid grid-cols-2 gap-3">
           <Field id="sets-input" name="sets" label="Sets" type="number" value={exerciseConfig.sets} onChange={(e) => setExerciseConfig(prev => ({ ...prev, sets: e.target.value }))} />
           <Field id="reps-input" name="reps" label="Reps" type="number" value={exerciseConfig.reps} onChange={(e) => setExerciseConfig(prev => ({ ...prev, reps: e.target.value }))} />
-          <Field id="weight-input" name="weight" label="Weight (kg)" type="number" value={exerciseConfig.weight_kg} onChange={(e) => setExerciseConfig(prev => ({ ...prev, weight_kg: e.target.value }))} />
+          {type !== 'rehab' && <Field id="weight-input" name="weight" label="Weight (kg)" type="number" value={exerciseConfig.weight_kg} onChange={(e) => setExerciseConfig(prev => ({ ...prev, weight_kg: e.target.value }))} />}
+          {type === 'rehab' && <Field id="hold-input" name="hold" label="Hold Time (sec)" type="number" value={exerciseConfig.hold_time_seconds} onChange={(e) => setExerciseConfig(prev => ({ ...prev, hold_time_seconds: e.target.value }))} />}
           <Field id="rest-input" name="rest" label="Rest (seconds)" type="number" value={exerciseConfig.rest_time_seconds} onChange={(e) => setExerciseConfig(prev => ({ ...prev, rest_time_seconds: e.target.value }))} />
         </div>
       </Modal>

@@ -37,7 +37,15 @@ function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/contact" element={<Contact />} />
-
+          <Route path="/help" element={<Help />} />
+          <Route 
+            path="/admin" 
+            element={
+              <AdminRouteGuard>
+                <AdminHub />
+              </AdminRouteGuard>
+            } 
+          />
           {/* Protected Routes */}
           <Route element={<ProtectedRoute />}>
             <Route element={<DashboardLayout />}>
@@ -70,16 +78,14 @@ function App() {
   )
 }
 export default App
-
 function AdminRouteGuard({ children }) {
   const { isAdmin, loading } = useAuth()
-
+  
   if (loading) return <div className="p-12 text-center font-medium text-text-disabled">Authorizing access...</div>
-
+  
   if (!isAdmin) {
     return <Navigate to="/dashboard" replace />
   }
-
+  
   return children
 }
-
