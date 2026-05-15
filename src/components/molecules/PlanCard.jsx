@@ -154,19 +154,25 @@ function ClosestPreview({ planId, planType, slots, routines, planImage, onToggle
       )
     }
     // Workout/Rehab with no slot data
-    return (
-      <div className="flex flex-col items-center gap-1 min-w-[4.5rem]">
-        <p className="text-body-sm text-text-disabled font-semibold text-center leading-tight">{fallbackLabel}</p>
-        <div className="w-full h-10 rounded-md bg-neutral-100" />
-        <div className="w-6 h-6 rounded-md border border-border-primary flex items-center justify-center text-text-disabled">
-          <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <polyline points="20 6 9 17 4 12" />
-          </svg>
+    // If routines array is empty, we're on the list view (detail not loaded yet)
+      const noRoutinesLoaded = !routines || routines.length === 0
+      return (
+        <div className="flex flex-col items-center justify-center w-full h-full text-center px-4 gap-2 min-w-[14rem]">
+          <div className="w-12 h-12 rounded-full bg-rehab-prim/10 flex items-center justify-center">
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-rehab-prim" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M6.5 6.5h11M6.5 17.5h11M4 12h16M4 12a2 2 0 01-2-2V8a2 2 0 012-2M20 12a2 2 0 002-2V8a2 2 0 00-2-2M4 12a2 2 0 00-2 2v2a2 2 0 002 2M20 12a2 2 0 012 2v2a2 2 0 01-2 2"/>
+            </svg>
+          </div>
+          <p className="text-body-md font-bold text-text-headings">
+            {noRoutinesLoaded ? 'Today\'s Exercises' : 'Rest Day'}
+          </p>
+          <p className="text-body-sm text-text-disabled">
+            {noRoutinesLoaded ? 'Open the plan to see your schedule.' : 'Time to recover and recharge.'}
+          </p>
         </div>
-      </div>
-    )
+      )
   }
+
 
   const parseTimeToDate = (timeStr) => {
     if (!timeStr) return new Date(0)
