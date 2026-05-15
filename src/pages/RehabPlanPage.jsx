@@ -11,6 +11,13 @@ import {
   addExerciseToRehabRoutine,
   deleteRoutineExercise,
 } from "../api/rehabService.js";
+import { getActiveRehabEnrollment, createEnrollment, updateEnrollmentStatus } from "../api/enrollmentService.js";
+import {
+  createRehabSession,
+  updateRehabSessionStatus,
+  updateRehabSessionExercise,
+  listRehabSessions,
+} from "../api/rehabTrackingService.js";
 
 // ── Modal wrapper ─────────────────────────────────────────────────────────────
 function Modal({ open, onClose, title, children, size = "md" }) {
@@ -546,6 +553,256 @@ function ProtocolStructure({ plan, onSlotClick }) {
   );
 }
 
+// ── Rehab Session Logger (slide-over) ─────────────────────────────────────────
+function RehabSessionLogger({ open, onClose, routine, planId, resumeSession, onSessionCompleted }) {
+  const [session, setSession]       = useState(null);
+  const [starting, setStarting]     = useState(false);
+  const [completing, setCompleting] = useState(false);
+  const [error, setError]           = useState("");
+  // local perf state: { [entryId]: { sets, reps, hold, pain, notes, is_completed } }
+  const [perf, setPerf]             = useState({});
+  const [saving, setSaving]         = useState(null);  // entryId being saved
+
+  const exercises = session?.exercises || [];
+
+  useEffect(() => {
+    if (!open) { setSession(null); setStarting(false); setCompleting(false); setError(""); setPerf({}); }
+  }, [open]);
+
+  // Auto-initialise perf — if resumeSession provided, pre-load it
+  useEffect(() => {
+    if (open && resumeSession && !session) {
+      setSession(resumeSession)
+      if (resumeSession.exercises?.length) {
+        const init = {};
+        resumeSession.exercises.forEach(ex => {
+          init[ex.id] = {
+            sets: String(ex.sets_completed ?? ""),
+            reps: String(ex.reps_completed ?? ""),
+            hold: String(ex.hold_time_seconds ?? ""),
+            pain: String(ex.pain_level ?? ""),
+            notes: ex.notes ?? "",
+            is_completed: ex.is_completed ?? false,
+          };
+        });
+        setPerf(init);
+      }
+    }
+  }, [open, resumeSession?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-initialise perf from session exercises
+  useEffect(() => {
+    if (session?.exercises?.length) {
+      const init = {};
+      session.exercises.forEach(ex => {
+        init[ex.id] = {
+          sets: String(ex.sets_completed ?? ""),
+          reps: String(ex.reps_completed ?? ""),
+          hold: String(ex.hold_time_seconds ?? ""),
+          pain: String(ex.pain_level ?? ""),
+          notes: ex.notes ?? "",
+          is_completed: ex.is_completed ?? false,
+        };
+      });
+      setPerf(init);
+    }
+  }, [session?.id]);
+
+  async function handleStart() {
+    setStarting(true); setError("");
+    try {
+      const s = await createRehabSession({ plan_id: planId, routine_id: routine.id, status: "in_progress" });
+      setSession(s);
+    } catch (err) { setError(err.message); }
+    finally { setStarting(false); }
+  }
+
+  async function handleSaveExercise(entryId) {
+    if (!session) return;
+    const p = perf[entryId] || {};
+    setSaving(entryId);
+    try {
+      const updated = await updateRehabSessionExercise(session.id, entryId, {
+        sets_completed:    p.sets ? parseInt(p.sets) : undefined,
+        reps_completed:    p.reps ? parseInt(p.reps) : undefined,
+        hold_time_seconds: p.hold ? parseInt(p.hold) : undefined,
+        pain_level:        p.pain ? parseInt(p.pain) : undefined,
+        notes:             p.notes || undefined,
+        is_completed:      true,
+      });
+      // Reflect backend state
+      setSession(prev => ({
+        ...prev,
+        exercises: prev.exercises.map(ex => ex.id === entryId ? updated : ex),
+      }));
+      setPerf(prev => ({ ...prev, [entryId]: { ...prev[entryId], is_completed: true } }));
+    } catch (err) { setError(err.message); }
+    finally { setSaving(null); }
+  }
+
+  async function handleComplete() {
+    if (!session) return;
+    setCompleting(true); setError("");
+    try {
+      await updateRehabSessionStatus(session.id, { status: "completed" });
+      window.dispatchEvent(new CustomEvent('sidebarStatsRefresh'));
+      if (onSessionCompleted) onSessionCompleted();
+      else onClose();
+    } catch (err) { setError(err.message); setCompleting(false); }
+  }
+
+  async function handleSkip() {
+    if (!session) return;
+    try { await updateRehabSessionStatus(session.id, { status: "skipped" }); } catch (_) {}
+    onClose();
+  }
+
+  function updateField(entryId, field, value) {
+    setPerf(prev => ({ ...prev, [entryId]: { ...(prev[entryId] || {}), [field]: value } }));
+  }
+
+  if (!open) return null;
+  const anyCompleted = exercises.some(ex => perf[ex.id]?.is_completed || ex.is_completed);
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end">
+      <div className="absolute inset-0 bg-neutral-black opacity-40" onClick={session ? undefined : onClose} />
+      <div className="relative bg-surface-primary w-full max-w-lg h-full flex flex-col shadow-2xl overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border-primary shrink-0 bg-rehab-prim">
+          <div>
+            <h2 className="text-heading-h6 font-bold text-neutral-white">{routine?.name || "Rehab Session"}</h2>
+            <p className="text-body-xs text-white/70">
+              {session ? (
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-success-400 inline-block animate-pulse" />
+                  Session in progress
+                </span>
+              ) : "Not started"}
+            </p>
+          </div>
+          <button onClick={session ? handleSkip : onClose}
+            className="text-neutral-white/70 hover:text-neutral-white transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto px-6 py-5 flex flex-col gap-5">
+          {!session ? (
+            <div className="flex flex-col items-center justify-center h-full gap-5 text-center">
+              <div className="w-16 h-16 rounded-full bg-rehab-prim/10 flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8 text-rehab-prim" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/>
+                </svg>
+              </div>
+              <div>
+                <p className="text-body-lg font-bold text-text-headings">{routine?.name}</p>
+                <p className="text-body-sm text-text-disabled mt-1">
+                  {(routine?.exercises || []).length} exercises · Logs auto-generated from prescription
+                </p>
+              </div>
+              <button onClick={handleStart} disabled={starting}
+                className="px-8 py-3 rounded-xl bg-rehab-prim text-neutral-white font-bold text-body-md hover:bg-rehab-prim/90 transition-colors shadow-lg disabled:opacity-50">
+                {starting ? "Starting…" : "▶ Start Session"}
+              </button>
+              {error && <p className="text-body-sm text-text-error">{error}</p>}
+            </div>
+          ) : (
+            <>
+              {exercises.map(ex => {
+                const p = perf[ex.id] || {};
+                const done = p.is_completed || ex.is_completed;
+                const isSaving = saving === ex.id;
+                return (
+                  <div key={ex.id} className={cn(
+                    "rounded-xl border p-4 flex flex-col gap-3 transition-colors",
+                    done ? "border-success-300 bg-success-50" : "border-border-primary",
+                  )}>
+                    <div className="flex items-center justify-between">
+                      <p className="text-body-md font-bold text-text-headings">
+                        {ex.exercise?.title || "Exercise"}
+                      </p>
+                      {done && <span className="text-body-xs font-bold px-2 py-0.5 rounded-full bg-success-100 text-success-700 border border-success-200">✓ Done</span>}
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <label className="flex flex-col gap-1">
+                        <span className="text-body-xs text-text-disabled font-semibold">Sets</span>
+                        <input type="number" min="0" value={p.sets || ""} disabled={done}
+                          onChange={e => updateField(ex.id, "sets", e.target.value)}
+                          placeholder="3"
+                          className="rounded-md px-2 py-1.5 text-body-sm border border-border-primary focus:outline-none focus:border-rehab-prim disabled:opacity-50" />
+                      </label>
+                      <label className="flex flex-col gap-1">
+                        <span className="text-body-xs text-text-disabled font-semibold">Reps</span>
+                        <input type="number" min="0" value={p.reps || ""} disabled={done}
+                          onChange={e => updateField(ex.id, "reps", e.target.value)}
+                          placeholder="10"
+                          className="rounded-md px-2 py-1.5 text-body-sm border border-border-primary focus:outline-none focus:border-rehab-prim disabled:opacity-50" />
+                      </label>
+                      <label className="flex flex-col gap-1">
+                        <span className="text-body-xs text-text-disabled font-semibold">Hold (sec)</span>
+                        <input type="number" min="0" value={p.hold || ""} disabled={done}
+                          onChange={e => updateField(ex.id, "hold", e.target.value)}
+                          placeholder="0"
+                          className="rounded-md px-2 py-1.5 text-body-sm border border-border-primary focus:outline-none focus:border-rehab-prim disabled:opacity-50" />
+                      </label>
+                      <label className="flex flex-col gap-1">
+                        <span className="text-body-xs text-text-disabled font-semibold">Pain (1–10)</span>
+                        <input type="number" min="1" max="10" value={p.pain || ""} disabled={done}
+                          onChange={e => updateField(ex.id, "pain", e.target.value)}
+                          placeholder="—"
+                          className="rounded-md px-2 py-1.5 text-body-sm border border-border-primary focus:outline-none focus:border-rehab-prim disabled:opacity-50" />
+                      </label>
+                    </div>
+                    <label className="flex flex-col gap-1">
+                      <span className="text-body-xs text-text-disabled font-semibold">Notes</span>
+                      <textarea rows="2" value={p.notes || ""} disabled={done}
+                        onChange={e => updateField(ex.id, "notes", e.target.value)}
+                        placeholder="How did it feel?"
+                        className="rounded-md px-2 py-1.5 text-body-sm border border-border-primary focus:outline-none focus:border-rehab-prim resize-none disabled:opacity-50" />
+                    </label>
+                    {!done && (
+                      <button onClick={() => handleSaveExercise(ex.id)} disabled={isSaving}
+                        className="w-full py-2 rounded-lg text-body-sm font-bold bg-rehab-prim text-neutral-white hover:bg-rehab-prim/90 transition-colors disabled:opacity-50">
+                        {isSaving ? "Saving…" : "✓ Mark Done"}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+              {error && <p className="text-body-sm text-text-error">{error}</p>}
+            </>
+          )}
+        </div>
+
+        {/* Footer */}
+        {session && (
+          <div className="px-6 py-4 border-t border-border-primary flex flex-col gap-2 shrink-0">
+            {/* Error always visible at bottom */}
+            {error && (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-error-50 border border-error-200">
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-error-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                <p className="text-body-xs text-error-600 font-medium">{error}</p>
+              </div>
+            )}
+            <button onClick={handleComplete} disabled={completing || !anyCompleted}
+              className="w-full py-3 rounded-xl bg-success-600 text-neutral-white font-bold text-body-md hover:bg-success-700 transition-colors shadow-md disabled:opacity-50">
+              {completing ? "Completing…" : "✓ Complete Session"}
+            </button>
+            {!anyCompleted && (
+              <p className="text-body-xs text-text-disabled text-center">Mark at least one exercise done to complete.</p>
+            )}
+            <button onClick={handleSkip} className="text-body-sm text-text-error hover:underline text-center">
+              Skip Session
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function RehabPlanPage() {
   const navigate = useNavigate();
@@ -557,6 +814,17 @@ export default function RehabPlanPage() {
 
   const [showAddRoutine, setShowAddRoutine] = useState(false);
   const [activeRoutine, setActiveRoutine] = useState(null);
+
+  // ── Tracker state
+  const [sessionRoutine, setSessionRoutine] = useState(null);
+  const [showSessionLogger, setShowSessionLogger] = useState(false);
+  const [existingSession, setExistingSession] = useState(null);
+  const [resumeSession, setResumeSession] = useState(null);
+
+  // ── Enrollment state ───────────────────────────────────────────────────
+  const [enrollment, setEnrollment] = useState(null);
+  const [enrolling, setEnrolling] = useState(false);
+  const [enrollError, setEnrollError] = useState("");
 
   const loadPlan = useCallback(async () => {
     try {
@@ -573,6 +841,48 @@ export default function RehabPlanPage() {
   useEffect(() => {
     loadPlan();
   }, [loadPlan]);
+
+  // Fetch active rehab enrollment on mount
+  useEffect(() => {
+    getActiveRehabEnrollment()
+      .then((e) => { if (e.rehab_plan_id === id) setEnrollment(e); })
+      .catch(() => {});
+  }, [id]);
+
+  // Detect any orphaned in_progress rehab session for this plan
+  useEffect(() => {
+    if (!id) return;
+    listRehabSessions({ status: 'in_progress', plan_id: id })
+      .then(({ results }) => {
+        if (results?.length) setExistingSession(results[0]);
+      })
+      .catch(() => {});
+  }, [id]);
+
+  async function handleEnroll() {
+    setEnrolling(true); setEnrollError("");
+    try {
+      const e = await createEnrollment({ rehabPlanId: id });
+      setEnrollment(e);
+    } catch (err) {
+      setEnrollError(err.message);
+    } finally {
+      setEnrolling(false);
+    }
+  }
+
+  async function handleEnrollStatus(newStatus) {
+    if (!enrollment) return;
+    setEnrolling(true); setEnrollError("");
+    try {
+      const e = await updateEnrollmentStatus(enrollment.id, newStatus);
+      setEnrollment(e);
+    } catch (err) {
+      setEnrollError(err.message);
+    } finally {
+      setEnrolling(false);
+    }
+  }
 
   async function handleRoutineUpdated() {
     await loadPlan();
@@ -725,6 +1035,72 @@ export default function RehabPlanPage() {
                 </p>
               )}
             </div>
+
+            {/* ── Enrollment panel ──────────────────────────────────────────── */}
+            <div className="bg-surface-primary rounded-xl border border-border-primary p-5 flex flex-col gap-3">
+              <p className="text-body-sm font-bold text-text-headings">Enrollment</p>
+              {enrollment ? (
+                <>
+                  <div className={cn(
+                    'inline-flex items-center gap-1.5 self-start text-body-sm font-bold px-3 py-1 rounded-full border',
+                    enrollment.status === 'active'    && 'bg-success-100 text-success-700 border-success-200',
+                    enrollment.status === 'paused'    && 'bg-warning-100 text-warning-700 border-warning-200',
+                    enrollment.status === 'completed' && 'bg-information-100 text-information-700 border-information-200',
+                    enrollment.status === 'dropped'   && 'bg-error-100 text-error-600 border-error-200',
+                  )}>
+                    {enrollment.status.charAt(0).toUpperCase() + enrollment.status.slice(1)}
+                  </div>
+                  <p className="text-body-xs text-text-disabled">
+                    Since {new Date(enrollment.enrolled_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </p>
+                  <div className="flex flex-col gap-2">
+                    {enrollment.status === 'active' && (
+                      <>
+                        <button onClick={() => handleEnrollStatus('paused')} disabled={enrolling}
+                          className="w-full py-2 rounded-lg text-body-sm font-bold border border-warning-300 text-warning-700 bg-warning-50 hover:bg-warning-100 transition-colors disabled:opacity-50">
+                          {enrolling ? '…' : '⏸ Pause Enrollment'}
+                        </button>
+                        <button onClick={() => handleEnrollStatus('completed')} disabled={enrolling}
+                          className="w-full py-2 rounded-lg text-body-sm font-bold border border-information-300 text-information-700 bg-information-50 hover:bg-information-100 transition-colors disabled:opacity-50">
+                          {enrolling ? '…' : '✓ Mark Completed'}
+                        </button>
+                        <button onClick={() => handleEnrollStatus('dropped')} disabled={enrolling}
+                          className="w-full py-2 rounded-lg text-body-sm font-bold border border-error-200 text-error-500 bg-error-50 hover:bg-error-100 transition-colors disabled:opacity-50">
+                          {enrolling ? '…' : '✕ Drop Protocol'}
+                        </button>
+                      </>
+                    )}
+                    {enrollment.status === 'paused' && (
+                      <>
+                        <button onClick={() => handleEnrollStatus('active')} disabled={enrolling}
+                          className="w-full py-2 rounded-lg text-body-sm font-bold bg-success-600 text-neutral-white hover:bg-success-700 transition-colors disabled:opacity-50">
+                          {enrolling ? '…' : '▶ Resume Enrollment'}
+                        </button>
+                        <button onClick={() => handleEnrollStatus('dropped')} disabled={enrolling}
+                          className="w-full py-2 rounded-lg text-body-sm font-bold border border-error-200 text-error-500 bg-error-50 hover:bg-error-100 transition-colors disabled:opacity-50">
+                          {enrolling ? '…' : '✕ Drop Protocol'}
+                        </button>
+                      </>
+                    )}
+                    {(enrollment.status === 'completed' || enrollment.status === 'dropped') && (
+                      <button onClick={handleEnroll} disabled={enrolling}
+                        className="w-full py-2 rounded-lg text-body-sm font-bold bg-success-600 text-neutral-white hover:bg-success-700 transition-colors disabled:opacity-50">
+                        {enrolling ? '…' : '↩ Re-enroll'}
+                      </button>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="text-body-sm text-text-disabled">Not enrolled yet.</p>
+                  <button onClick={handleEnroll} disabled={enrolling}
+                    className="w-full py-2.5 rounded-lg text-body-sm font-bold bg-rehab-prim text-neutral-white hover:bg-rehab-prim/90 transition-colors shadow-sm disabled:opacity-50">
+                    {enrolling ? 'Enrolling…' : '+ Enroll in This Protocol'}
+                  </button>
+                </>
+              )}
+              {enrollError && <p className="text-body-xs text-text-error">{enrollError}</p>}
+            </div>
           </div>
 
           {/* Right: Routines grid */}
@@ -740,6 +1116,35 @@ export default function RehabPlanPage() {
                 + Add Routine
               </button>
             </div>
+
+            {/* Resume banner — shows when an in_progress rehab session exists */}
+            {existingSession && (() => {
+              const routineMatch = routines?.find(r => r.id === existingSession.routine_id);
+              return (
+                <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-warning-50 border border-warning-300">
+                  <span className="text-warning-600 text-body-lg">⚠</span>
+                  <div className="flex-1">
+                    <p className="text-body-sm font-bold text-warning-700">Session in progress</p>
+                    <p className="text-body-xs text-warning-600">{routineMatch?.name || 'Unknown module'} — started earlier</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      const r = routineMatch || routines?.[0];
+                      setSessionRoutine(r);
+                      setResumeSession(existingSession);
+                      setShowSessionLogger(true);
+                    }}
+                    className="px-3 py-1.5 rounded-lg text-body-sm font-bold bg-warning-600 text-neutral-white hover:bg-warning-700 transition-colors">
+                    ▶ Resume
+                  </button>
+                  <button
+                    onClick={() => setExistingSession(null)}
+                    className="text-warning-400 hover:text-warning-600 transition-colors" aria-label="Dismiss">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </button>
+                </div>
+              );
+            })()}
 
             {routines.length === 0 ? (
               <div className="py-16 flex flex-col items-center gap-3 border-2 border-dashed border-border-primary rounded-xl text-center">
@@ -774,10 +1179,15 @@ export default function RehabPlanPage() {
                         {(routine.exercises || []).length !== 1 ? "s" : ""}
                       </span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Button variant="outline" size="sm">
+                  <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                      <Button variant="outline" size="sm" onClick={() => setActiveRoutine(routine)}>
                         View
                       </Button>
+                      <button
+                        onClick={() => { setSessionRoutine(routine); setShowSessionLogger(true); }}
+                        className="px-3 py-1.5 rounded-lg text-body-sm font-bold bg-rehab-prim text-neutral-white hover:bg-rehab-prim/90 transition-colors">
+                        ▶ Start Session
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -870,6 +1280,19 @@ export default function RehabPlanPage() {
         onClose={() => setActiveRoutine(null)}
         onRoutineUpdated={handleRoutineUpdated}
         onDeleteRoutine={handleDeleteRoutine}
+      />
+      <RehabSessionLogger
+        open={showSessionLogger}
+        onClose={() => { setShowSessionLogger(false); setSessionRoutine(null); setResumeSession(null); }}
+        routine={sessionRoutine}
+        planId={id}
+        resumeSession={resumeSession}
+        onSessionCompleted={() => {
+          setShowSessionLogger(false);
+          setSessionRoutine(null);
+          setResumeSession(null);
+          setExistingSession(null); // clear banner
+        }}
       />
     </div>
   );

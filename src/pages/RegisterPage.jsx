@@ -2,9 +2,10 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Field } from '../components/atoms/Field'
 import { Button } from '../components/atoms/Button'
-import { register } from '../api/authService'
+import { useAuth } from '../context/AuthContext'
 
 export default function RegisterPage() {
+  const { register } = useAuth()
   const navigate = useNavigate()
   const [form, setForm] = useState({ fullName: '', username: '', email: '', password: '', confirm: '' })
   const [error, setError] = useState('')
@@ -29,11 +30,8 @@ export default function RegisterPage() {
 
     setLoading(true)
     try {
-      const data = await register(form.fullName, form.username, form.email, form.password)
-      localStorage.setItem('token', data.access_token)
-      if (data.refresh_token) localStorage.setItem('refresh_token', data.refresh_token)
-      localStorage.setItem('user_id', data.user?.id || '')
-      localStorage.setItem('username', data.user?.name || form.username)
+      await register(form.fullName, form.username, form.email, form.password)
+      // AuthContext.register already calls saveTokens() internally
       navigate('/onboarding')
     } catch (err) {
       setError(err.message || 'Something went wrong. Please try again.')

@@ -96,6 +96,21 @@ export async function refreshToken() {
 }
 
 /**
+ * Logout — invalidates the session on the backend (best-effort)
+ */
+export async function logoutUser() {
+  if (MOCK) return
+  try {
+    await fetch(`${API_URL}/auth/logout`, {
+      method: 'POST',
+      headers: authHeaders(),
+    })
+  } catch {
+    // Swallow network errors — local session will still be cleared
+  }
+}
+
+/**
  * Get current user from token
  */
 export async function getMe() {
@@ -117,6 +132,7 @@ export async function getUserMetrics() {
   const res = await fetch(`${API_URL}/auth/health-profile`, {
     headers: authHeaders(),
   })
+  if (res.status === 404) return null  // User hasn't created a health profile yet
   const data = await res.json()
   if (!res.ok) throw new Error(data.detail || 'Failed to fetch health profile')
   return data

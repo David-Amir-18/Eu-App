@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Button } from '../components/atoms/Button.jsx'
 import { DefinedField } from '../components/molecules/DefinedField.jsx'
 import { getExercises, getExerciseFilters } from '../api/exercisesService.js'
+import { getWorkoutPlans, getWorkoutPlan, addExerciseToRoutine } from '../api/workoutsService.js'
 
 const PAGE_SIZE = 20
 
@@ -62,6 +63,8 @@ export default function WorkoutsPage() {
   const [exerciseToAddToPlan, setExerciseToAddToPlan] = useState(null)
   const [targetPlanId, setTargetPlanId] = useState('')
   const [targetRoutineId, setTargetRoutineId] = useState('')
+  const [targetPlanRoutines, setTargetPlanRoutines] = useState([]) // routines with real UUIDs
+  const [isAddingToPlan, setIsAddingToPlan] = useState(false)
   const [toastMessage, setToastMessage] = useState('')
 
   // Helper to format DB slugs (e.g., "upper_back" -> "Upper Back")
@@ -132,80 +135,63 @@ export default function WorkoutsPage() {
     return () => clearTimeout(timer)
   }, [page, searchQuery, activeMuscle, activeEquipment, activeType])
 
-  // Load plans on component mount
+  // Load workout plans from backend on mount
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem('user_plans')
-      const parsed = stored ? JSON.parse(stored) : []
-      // Filter Workout plans
-      const workoutPlans = parsed.filter(p => p.defaultTab === 'Workout')
-      setUserPlans(workoutPlans)
-      if (workoutPlans.length > 0) {
-        setTargetPlanId(workoutPlans[0].id)
-        // Set default routine/slot
-        const activeDays = workoutPlans[0].rawWorkoutDays || ['Mon', 'Wed', 'Fri']
-        setTargetRoutineId(activeDays[0])
+    const fetchPlans = async () => {
+      try {
+        const plans = await getWorkoutPlans()
+        setUserPlans(plans || [])
+        if (plans && plans.length > 0) {
+          setTargetPlanId(plans[0].id)
+          // Fetch full plan to get routines with IDs
+          const full = await getWorkoutPlan(plans[0].id)
+          setTargetPlanRoutines(full.plan_routines || [])
+          if (full.plan_routines && full.plan_routines.length > 0) {
+            setTargetRoutineId(full.plan_routines[0].id)
+          }
+        }
+      } catch (e) {
+        console.error('Failed to fetch workout plans', e)
       }
-    } catch (e) {
-      console.error(e)
     }
+    fetchPlans()
   }, [])
 
-  // Dynamic routine target updating when plan selection changes
-  const handlePlanChange = (planId) => {
+  // When plan changes, load its routines to get real IDs
+  const handlePlanChange = async (planId) => {
     setTargetPlanId(planId)
-    const selectedPlan = userPlans.find(p => p.id === planId)
-    if (selectedPlan) {
-      const activeDays = selectedPlan.rawWorkoutDays || ['Mon', 'Wed', 'Fri']
-      setTargetRoutineId(activeDays[0])
+    setTargetRoutineId('')
+    try {
+      const full = await getWorkoutPlan(planId)
+      const routines = full.plan_routines || []
+      setTargetPlanRoutines(routines)
+      if (routines.length > 0) setTargetRoutineId(routines[0].id)
+    } catch (e) {
+      console.error('Failed to load plan routines', e)
     }
   }
 
-  // Add exercise to selected Workout Plan & Routine in LocalStorage
-  const handleAddExerciseToPlan = () => {
-    if (!targetPlanId || !targetRoutineId || !exerciseToAddToPlan) return
+  // Add exercise to routine via backend POST /workouts/routines/{routineId}/exercises
+  const handleAddExerciseToPlan = async () => {
+    if (!targetRoutineId || !exerciseToAddToPlan) return
 
+    setIsAddingToPlan(true)
     try {
-      const stored = localStorage.getItem('user_plans')
-      const parsed = stored ? JSON.parse(stored) : []
-
-      const updatedPlans = parsed.map(plan => {
-        if (plan.id === targetPlanId) {
-          // Initialize routines / structure if it doesn't exist
-          if (!plan.routines) {
-            const activeDays = plan.rawWorkoutDays || ['Mon', 'Wed', 'Fri']
-            plan.routines = activeDays.map(day => ({
-              id: day.toLowerCase(),
-              name: day,
-              exercises: []
-            }))
-          }
-
-          // Add exercise name/title to specified day's exercises
-          plan.routines = plan.routines.map(r => {
-            if (r.name.toLowerCase() === targetRoutineId.toLowerCase()) {
-              const exists = r.exercises.includes(exerciseToAddToPlan.title)
-              if (!exists) {
-                r.exercises.push(exerciseToAddToPlan.title)
-              }
-            }
-            return r
-          })
-        }
-        return plan
+      await addExerciseToRoutine(targetRoutineId, {
+        exercise_id: exerciseToAddToPlan.id,
       })
 
-      localStorage.setItem('user_plans', JSON.stringify(updatedPlans))
-
-      // Show success toast
-      const planName = userPlans.find(p => p.id === targetPlanId)?.name || 'Plan'
-      setToastMessage(`"${exerciseToAddToPlan.title}" added to ${targetRoutineId} in "${planName}"!`)
+      const planName = userPlans.find(p => p.id === targetPlanId)?.title || 'Plan'
+      const routineName = targetPlanRoutines.find(r => r.id === targetRoutineId)?.name || targetRoutineId
+      setToastMessage(`"${exerciseToAddToPlan.title}" added to ${routineName} in "${planName}"!`)
       setShowAddToPlanModal(false)
-
-      // Clear toast after 3 seconds
       setTimeout(() => setToastMessage(''), 3000)
     } catch (e) {
-      console.error(e)
+      setToastMessage(`Failed to add exercise: ${e.message}`)
+      setShowAddToPlanModal(false)
+      setTimeout(() => setToastMessage(''), 4000)
+    } finally {
+      setIsAddingToPlan(false)
     }
   }
 
@@ -574,7 +560,7 @@ export default function WorkoutsPage() {
                     label="Workout Day / Slot"
                     value={targetRoutineId}
                     onChange={setTargetRoutineId}
-                    options={(userPlans.find(p => p.id === targetPlanId)?.rawWorkoutDays || ['Mon', 'Wed', 'Fri']).map(day => ({ value: day, label: day }))}
+                    options={targetPlanRoutines.map(r => ({ value: r.id, label: r.name || `Routine ${r.day_number || r.day_of_week}` }))}
                   />
                 </>
               ) : (
@@ -596,10 +582,10 @@ export default function WorkoutsPage() {
               <Button
                 variant="workout-primary"
                 className="flex-1 shadow-md"
-                disabled={userPlans.length === 0}
+                disabled={userPlans.length === 0 || !targetRoutineId || isAddingToPlan}
                 onClick={handleAddExerciseToPlan}
               >
-                Confirm Add
+                {isAddingToPlan ? 'Adding...' : 'Confirm Add'}
               </Button>
             </div>
 
