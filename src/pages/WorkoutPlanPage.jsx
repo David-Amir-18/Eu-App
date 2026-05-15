@@ -7,6 +7,16 @@ import { DatePicker } from '../components/molecules/DatePicker.jsx'
 import { DefinedField } from '../components/molecules/DefinedField.jsx'
 import { getExercises } from '../api/exercisesService.js'
 import { getWorkoutPlan, createRoutine, deleteRoutine, addExerciseToRoutine, updateWorkoutPlan, updateRoutine, cloneRoutine } from '../api/workoutsService.js'
+import { getActiveWorkoutEnrollment, createEnrollment, updateEnrollmentStatus } from '../api/enrollmentService.js'
+import {
+  createWorkoutSession,
+  updateWorkoutSessionStatus,
+  logWorkoutSet,
+  logWorkoutSetsBulk,
+  updateWorkoutSet,
+  deleteWorkoutSet,
+  getWorkoutSessions,
+} from '../api/workoutTrackingService.js'
 
 const WEEK_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const WEEK_DAYS_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -221,40 +231,303 @@ function RoutineSlideOver({ routine, planId, onClose, onRoutineUpdated, onDelete
   )
 }
 
-// ── Log Workout Modal ─────────────────────────────────────────────────────────
-function LogWorkoutModal({ open, onClose, routine }) {
-  const exList = routine?.exercises || []
-  const [sets, setSets] = useState([])
+// ── Workout Session Logger (slide-over) ───────────────────────────────────────
+// Replaces the fake LogWorkoutModal. Creates a real in_progress session,
+// lets the user log sets per exercise, then completes it.
+function WorkoutSessionLogger({ open, onClose, routine, planId, onSessionCompleted, resumeSession }) {
+  const [session, setSession]         = useState(null)   // SessionResponse from backend
+  const [starting, setStarting]       = useState(false)
+  const [completing, setCompleting]   = useState(false)
+  const [error, setError]             = useState('')
 
+  // Per-exercise set data: { [exerciseId]: [{ set_number, reps, weight, itemId, is_completed }] }
+  const [setData, setSetData] = useState({})
+  const [loggingId, setLoggingId] = useState(null)  // exerciseId currently being submitted
+
+  const exList = routine?.exercises || []
+
+  // Reset state every time we open for a different routine
   useEffect(() => {
-    setSets(exList.map(e => ({ name: e.exercise?.title || 'Exercise', reps: String(e.reps || ''), weight: String(e.weight_kg || '') })))
-  }, [routine?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (open && routine) {
+      // If resuming an existing session, pre-load it
+      if (resumeSession) {
+        setSession(resumeSession)
+        setError('')
+        setCompleting(false)
+        // Pre-fill set rows from routine prescription
+        const initial = {}
+        exList.forEach(entry => {
+          const exId = entry.exercise_id || entry.exercise?.id
+          if (!exId) return
+          const numSets = entry.sets || 3
+          initial[exId] = Array.from({ length: numSets }, (_, i) => ({
+            set_number: i + 1,
+            reps: String(entry.reps || ''),
+            weight: String(entry.weight_kg || ''),
+            itemId: null,
+            is_completed: false,
+          }))
+        })
+        setSetData(initial)
+        return
+      }
+      setSession(null)
+      setError('')
+      setCompleting(false)
+      const initial = {}
+      exList.forEach(entry => {
+        const exId = entry.exercise_id || entry.exercise?.id
+        if (!exId) return
+        const numSets = entry.sets || 3
+        initial[exId] = Array.from({ length: numSets }, (_, i) => ({
+          set_number: i + 1,
+          reps: String(entry.reps || ''),
+          weight: String(entry.weight_kg || ''),
+          itemId: null,
+          is_completed: false,
+        }))
+      })
+      setSetData(initial)
+    }
+    if (!open) {
+      setSession(null)
+      setStarting(false)
+      setCompleting(false)
+      setError('')
+    }
+  }, [open, routine?.id, resumeSession?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Create the session in_progress
+  async function handleStart() {
+    setStarting(true); setError('')
+    try {
+      const s = await createWorkoutSession({
+        workout_plan_id: planId || null,
+        routine_id: routine?.id || null,
+        status: 'in_progress',
+      })
+      setSession(s)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setStarting(false)
+    }
+  }
+
+  // Log all sets for one exercise (bulk)
+  async function handleLogExercise(exId, exerciseName) {
+    if (!session) return
+    const rows = setData[exId] || []
+    const setsPayload = rows.map(r => ({
+      exercise_id: exId,
+      set_number: r.set_number,
+      reps_completed: r.reps ? parseInt(r.reps) : 0,
+      weight_used: r.weight ? parseFloat(r.weight) : 0,
+      is_completed: true,
+    }))
+    setLoggingId(exId)
+    try {
+      await logWorkoutSetsBulk(session.id, exId, setsPayload)
+      // Mark all sets completed locally
+      setSetData(prev => ({
+        ...prev,
+        [exId]: prev[exId].map(r => ({ ...r, is_completed: true })),
+      }))
+    } catch (err) {
+      setError(`Failed to log ${exerciseName}: ${err.message}`)
+    } finally {
+      setLoggingId(null)
+    }
+  }
+
+  // Complete the session
+  async function handleComplete() {
+    if (!session) return
+    setCompleting(true); setError('')
+    try {
+      await updateWorkoutSessionStatus(session.id, { status: 'completed' })
+      window.dispatchEvent(new CustomEvent('sidebarStatsRefresh'))
+      onSessionCompleted?.()
+      onClose()
+    } catch (err) {
+      setError(err.message)
+      setCompleting(false)
+    }
+  }
+
+  // Abandon
+  async function handleAbandon() {
+    if (!session) return
+    try {
+      await updateWorkoutSessionStatus(session.id, { status: 'abandoned' })
+    } catch (_) {}
+    onClose()
+  }
+
+  function updateSetRow(exId, idx, field, value) {
+    setSetData(prev => ({
+      ...prev,
+      [exId]: prev[exId].map((r, i) => i === idx ? { ...r, [field]: value } : r),
+    }))
+  }
+
+  function addSetRow(exId) {
+    setSetData(prev => {
+      const rows = prev[exId] || []
+      return {
+        ...prev,
+        [exId]: [...rows, { set_number: rows.length + 1, reps: '', weight: '', itemId: null, is_completed: false }],
+      }
+    })
+  }
+
+  if (!open) return null
+
+  const anyLogged = Object.values(setData).some(rows => rows.some(r => r.is_completed))
 
   return (
-    <Modal open={open} onClose={onClose} title={`Log: ${routine?.name || ''}`} size="lg">
-      <p className="text-body-sm text-text-disabled">Enter actual reps and weight for each exercise.</p>
-      {sets.map((s, i) => (
-        <div key={i} className="flex flex-col gap-2">
-          <span className="text-body-sm font-semibold text-text-headings">{s.name}</span>
-          <div className="flex gap-3">
-            <Field id={`reps-${i}`} name="reps" placeholder="Reps" type="number" value={s.reps}
-              onChange={e => setSets(prev => prev.map((p, idx) => idx === i ? { ...p, reps: e.target.value } : p))}
-              className="flex-1" />
-            <Field id={`weight-${i}`} name="weight" placeholder="Weight (kg)" type="number" value={s.weight}
-              onChange={e => setSets(prev => prev.map((p, idx) => idx === i ? { ...p, weight: e.target.value } : p))}
-              className="flex-1" />
+    <div className="fixed inset-0 z-50 flex justify-end">
+      <div className="absolute inset-0 bg-neutral-black opacity-40" onClick={session ? undefined : onClose} />
+      <div className="relative bg-surface-primary w-full max-w-lg h-full flex flex-col shadow-2xl overflow-hidden">
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border-primary shrink-0 bg-workout-prim">
+          <div>
+            <h2 className="text-heading-h6 font-bold text-neutral-white">{routine?.name || 'Workout'}</h2>
+            <p className="text-body-xs text-workout-prim-100">
+              {session ? (
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-success-400 inline-block animate-pulse" />
+                  Session in progress
+                </span>
+              ) : 'Not started'}
+            </p>
           </div>
+          <button onClick={session ? handleAbandon : onClose}
+            className="text-neutral-white/70 hover:text-neutral-white transition-colors" aria-label="Close">
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
         </div>
-      ))}
-      <div className="flex gap-3 pt-2">
-        <Button variant="workout-outline" size="md" onClick={onClose} className="flex-1">Cancel</Button>
-        <Button variant="workout-primary" size="md" onClick={onClose} className="flex-1">Save Log</Button>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto px-6 py-5 flex flex-col gap-6">
+
+          {!session ? (
+            /* ── Pre-start state ── */
+            <div className="flex flex-col items-center justify-center h-full gap-5 text-center">
+              <div className="w-16 h-16 rounded-full bg-workout-prim/10 flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8 text-workout-prim" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M6.5 6.5h11M6.5 17.5h11M4 12h16M4 12a2 2 0 01-2-2V8a2 2 0 012-2M20 12a2 2 0 002-2V8a2 2 0 00-2-2M4 12a2 2 0 00-2 2v2a2 2 0 002 2M20 12a2 2 0 012 2v2a2 2 0 01-2 2"/>
+                </svg>
+              </div>
+              <div>
+                <p className="text-body-lg font-bold text-text-headings">{routine?.name}</p>
+                <p className="text-body-sm text-text-disabled mt-1">{exList.length} exercises · Start to begin logging</p>
+              </div>
+              <button onClick={handleStart} disabled={starting}
+                className="px-8 py-3 rounded-xl bg-workout-prim text-neutral-white font-bold text-body-md hover:bg-workout-prim/90 transition-colors shadow-lg disabled:opacity-50">
+                {starting ? 'Starting…' : '▶ Start Session'}
+              </button>
+              {error && <p className="text-body-sm text-text-error">{error}</p>}
+            </div>
+          ) : (
+            /* ── In-progress: exercise logging ── */
+            <>
+              {exList.map((entry) => {
+                const exId = entry.exercise_id || entry.exercise?.id
+                if (!exId) return null
+                const title = entry.exercise?.title || `Exercise`
+                const rows = setData[exId] || []
+                const allDone = rows.length > 0 && rows.every(r => r.is_completed)
+                const isLogging = loggingId === exId
+
+                return (
+                  <div key={exId} className={cn(
+                    'rounded-xl border p-4 flex flex-col gap-3 transition-colors',
+                    allDone ? 'border-success-300 bg-success-50' : 'border-border-primary bg-surface-primary',
+                  )}>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-body-md font-bold text-text-headings">{title}</p>
+                        <p className="text-body-xs text-text-disabled capitalize">
+                          {entry.exercise?.muscle_group} · {entry.exercise?.equipment_category}
+                        </p>
+                      </div>
+                      {allDone && (
+                        <span className="text-body-xs font-bold px-2 py-0.5 rounded-full bg-success-100 text-success-700 border border-success-200">✓ Done</span>
+                      )}
+                    </div>
+
+                    {/* Set rows */}
+                    <div className="flex flex-col gap-2">
+                      <div className="grid grid-cols-[2rem_1fr_1fr_auto] gap-2 text-body-xs text-text-disabled font-semibold px-1">
+                        <span>Set</span><span>Reps</span><span>Weight (kg)</span><span />
+                      </div>
+                      {rows.map((row, idx) => (
+                        <div key={idx} className="grid grid-cols-[2rem_1fr_1fr_auto] gap-2 items-center">
+                          <span className={cn('text-body-sm font-bold text-center', row.is_completed ? 'text-success-600' : 'text-text-disabled')}>{idx + 1}</span>
+                          <input
+                            type="number" min="0" value={row.reps} disabled={allDone}
+                            onChange={e => updateSetRow(exId, idx, 'reps', e.target.value)}
+                            placeholder="12"
+                            className="rounded-md px-2 py-1.5 text-body-sm border border-border-primary focus:outline-none focus:border-workout-prim bg-surface-primary text-text-body w-full disabled:opacity-50"
+                          />
+                          <input
+                            type="number" min="0" step="0.5" value={row.weight} disabled={allDone}
+                            onChange={e => updateSetRow(exId, idx, 'weight', e.target.value)}
+                            placeholder="0"
+                            className="rounded-md px-2 py-1.5 text-body-sm border border-border-primary focus:outline-none focus:border-workout-prim bg-surface-primary text-text-body w-full disabled:opacity-50"
+                          />
+                          {row.is_completed
+                            ? <span className="text-success-600 text-body-sm font-bold">✓</span>
+                            : <span className="w-4" />}
+                        </div>
+                      ))}
+                    </div>
+
+                    {!allDone && (
+                      <div className="flex gap-2 mt-1">
+                        <button onClick={() => addSetRow(exId)}
+                          className="text-body-xs text-workout-prim font-semibold hover:underline">
+                          + Add Set
+                        </button>
+                        <button onClick={() => handleLogExercise(exId, title)} disabled={isLogging}
+                          className="ml-auto px-4 py-1.5 rounded-lg text-body-sm font-bold bg-workout-prim text-neutral-white hover:bg-workout-prim/90 transition-colors disabled:opacity-50">
+                          {isLogging ? 'Saving…' : 'Log Exercise'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+
+              {error && <p className="text-body-sm text-text-error px-1">{error}</p>}
+            </>
+          )}
+        </div>
+
+        {/* Footer */}
+        {session && (
+          <div className="px-6 py-4 border-t border-border-primary flex flex-col gap-2 shrink-0">
+            <button onClick={handleComplete} disabled={completing || !anyLogged}
+              className="w-full py-3 rounded-xl bg-success-600 text-neutral-white font-bold text-body-md hover:bg-success-700 transition-colors shadow-md disabled:opacity-50">
+              {completing ? 'Completing…' : '✓ Complete Session'}
+            </button>
+            {!anyLogged && (
+              <p className="text-body-xs text-text-disabled text-center">Log at least one exercise to complete the session.</p>
+            )}
+            <button onClick={handleAbandon} className="text-body-sm text-text-error hover:underline text-center">
+              Abandon Session
+            </button>
+          </div>
+        )}
       </div>
-    </Modal>
+    </div>
   )
 }
 
 // ── Plan Structure sidebar ────────────────────────────────────────────────────
+
 function PlanStructure({ plan, onSlotClick }) {
   const routines = plan.plan_routines || []
   if (plan.schedule_type === 'weekly') {
@@ -477,7 +750,18 @@ export default function WorkoutPlanPage() {
   const [showEditRoutine, setShowEditRoutine] = useState(false)
   const [editingRoutine, setEditingRoutine] = useState(null)
   const [activeRoutine, setActiveRoutine] = useState(null)
-  const [showLog, setShowLog] = useState(false)
+  const [showLog, setShowLog] = useState(false)  // legacy, kept for RoutineSlideOver compat
+
+  // ── Tracker state ─────────────────────────────────────────────────────
+  const [sessionRoutine, setSessionRoutine] = useState(null)  // routine being logged
+  const [showSessionLogger, setShowSessionLogger] = useState(false)
+  const [existingSession, setExistingSession] = useState(null) // orphaned in_progress session
+  const [resumeSession, setResumeSession] = useState(null)     // session to resume
+
+  // ── Enrollment state ─────────────────────────────────────────────────────
+  const [enrollment, setEnrollment] = useState(null)   // EnrollmentResponse | null
+  const [enrolling, setEnrolling] = useState(false)
+  const [enrollError, setEnrollError] = useState('')
 
   const fetchPlan = useCallback(async () => {
     if (!planId) return
@@ -501,6 +785,50 @@ export default function WorkoutPlanPage() {
   }, [planId, navigate])
 
   useEffect(() => { fetchPlan() }, [fetchPlan])
+
+  // Fetch active enrollment for this plan on mount
+  useEffect(() => {
+    getActiveWorkoutEnrollment()
+      .then(e => { if (e.workout_plan_id === planId) setEnrollment(e) })
+      .catch(() => {}) // 404 = not enrolled, that's fine
+  }, [planId])
+
+  // Detect any orphaned in_progress session for this plan
+  useEffect(() => {
+    if (!planId) return
+    getWorkoutSessions({ status: 'in_progress', workout_plan_id: planId })
+      .then(({ results }) => {
+        if (results?.length) setExistingSession(results[0])
+      })
+      .catch(() => {})
+  }, [planId])
+
+  // Enroll in this plan
+  async function handleEnroll() {
+    setEnrolling(true); setEnrollError('')
+    try {
+      const e = await createEnrollment({ workoutPlanId: planId })
+      setEnrollment(e)
+    } catch (err) {
+      setEnrollError(err.message)
+    } finally {
+      setEnrolling(false)
+    }
+  }
+
+  // Change status
+  async function handleEnrollStatus(newStatus) {
+    if (!enrollment) return
+    setEnrolling(true); setEnrollError('')
+    try {
+      const e = await updateEnrollmentStatus(enrollment.id, newStatus)
+      setEnrollment(e)
+    } catch (err) {
+      setEnrollError(err.message)
+    } finally {
+      setEnrolling(false)
+    }
+  }
 
   // Refresh just the active routine after adding an exercise
   async function handleRoutineUpdated() {
@@ -617,13 +945,81 @@ export default function WorkoutPlanPage() {
                 <p className="text-body-sm text-workout-prim-100">{(todayRoutine.exercises || []).length} exercises</p>
                 <Button variant="workout-outline" size="sm"
                   className="border-neutral-white text-neutral-white hover:bg-neutral-white/10"
-                  onClick={() => { setActiveRoutine(todayRoutine); setShowLog(true) }}>
-                  Log Workout
+                  onClick={() => { setSessionRoutine(todayRoutine); setShowSessionLogger(true) }}>
+                  ▶ Start Session
                 </Button>
               </>
             ) : (
               <p className="text-body-md font-semibold text-neutral-white">Rest Day </p>
             )}
+          </div>
+
+          {/* ── Enrollment panel ────────────────────────────────────────────── */}
+          <div className="bg-surface-primary rounded-xl border border-border-primary p-5 flex flex-col gap-3">
+            <p className="text-body-sm font-bold text-text-headings">Enrollment</p>
+
+            {enrollment ? (
+              <>
+                <div className={cn(
+                  'inline-flex items-center gap-1.5 self-start text-body-sm font-bold px-3 py-1 rounded-full border',
+                  enrollment.status === 'active'    && 'bg-success-100 text-success-700 border-success-200',
+                  enrollment.status === 'paused'    && 'bg-warning-100 text-warning-700 border-warning-200',
+                  enrollment.status === 'completed' && 'bg-information-100 text-information-700 border-information-200',
+                  enrollment.status === 'dropped'   && 'bg-error-100 text-error-600 border-error-200',
+                )}>
+                  {enrollment.status.charAt(0).toUpperCase() + enrollment.status.slice(1)}
+                </div>
+                <p className="text-body-xs text-text-disabled">
+                  Since {new Date(enrollment.enrolled_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                </p>
+                <div className="flex flex-col gap-2">
+                  {enrollment.status === 'active' && (
+                    <>
+                      <button onClick={() => handleEnrollStatus('paused')} disabled={enrolling}
+                        className="w-full py-2 rounded-lg text-body-sm font-bold border border-warning-300 text-warning-700 bg-warning-50 hover:bg-warning-100 transition-colors disabled:opacity-50">
+                        {enrolling ? '…' : '⏸ Pause Enrollment'}
+                      </button>
+                      <button onClick={() => handleEnrollStatus('completed')} disabled={enrolling}
+                        className="w-full py-2 rounded-lg text-body-sm font-bold border border-information-300 text-information-700 bg-information-50 hover:bg-information-100 transition-colors disabled:opacity-50">
+                        {enrolling ? '…' : '✓ Mark Completed'}
+                      </button>
+                      <button onClick={() => handleEnrollStatus('dropped')} disabled={enrolling}
+                        className="w-full py-2 rounded-lg text-body-sm font-bold border border-error-200 text-error-500 bg-error-50 hover:bg-error-100 transition-colors disabled:opacity-50">
+                        {enrolling ? '…' : '✕ Drop Plan'}
+                      </button>
+                    </>
+                  )}
+                  {enrollment.status === 'paused' && (
+                    <>
+                      <button onClick={() => handleEnrollStatus('active')} disabled={enrolling}
+                        className="w-full py-2 rounded-lg text-body-sm font-bold bg-success-600 text-neutral-white hover:bg-success-700 transition-colors disabled:opacity-50">
+                        {enrolling ? '…' : '▶ Resume Enrollment'}
+                      </button>
+                      <button onClick={() => handleEnrollStatus('dropped')} disabled={enrolling}
+                        className="w-full py-2 rounded-lg text-body-sm font-bold border border-error-200 text-error-500 bg-error-50 hover:bg-error-100 transition-colors disabled:opacity-50">
+                        {enrolling ? '…' : '✕ Drop Plan'}
+                      </button>
+                    </>
+                  )}
+                  {(enrollment.status === 'completed' || enrollment.status === 'dropped') && (
+                    <button onClick={handleEnroll} disabled={enrolling}
+                      className="w-full py-2 rounded-lg text-body-sm font-bold bg-success-600 text-neutral-white hover:bg-success-700 transition-colors disabled:opacity-50">
+                      {enrolling ? '…' : '↩ Re-enroll'}
+                    </button>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-body-sm text-text-disabled">Not enrolled yet.</p>
+                <button onClick={handleEnroll} disabled={enrolling}
+                  className="w-full py-2.5 rounded-lg text-body-sm font-bold bg-workout-prim text-neutral-white hover:bg-workout-prim/90 transition-colors shadow-sm disabled:opacity-50">
+                  {enrolling ? 'Enrolling…' : '+ Enroll in This Plan'}
+                </button>
+              </>
+            )}
+
+            {enrollError && <p className="text-body-xs text-text-error">{enrollError}</p>}
           </div>
         </div>
 
@@ -635,6 +1031,35 @@ export default function WorkoutPlanPage() {
               + Add Routine
             </Button>
           </div>
+
+          {/* Resume banner — shows when an in_progress session exists */}
+          {existingSession && (() => {
+            const routineMatch = plan.plan_routines?.find(r => r.id === existingSession.routine_id)
+            return (
+              <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-warning-50 border border-warning-300">
+                <span className="text-warning-600 text-body-lg">⚠</span>
+                <div className="flex-1">
+                  <p className="text-body-sm font-bold text-warning-700">Session in progress</p>
+                  <p className="text-body-xs text-warning-600">{routineMatch?.name || 'Unknown routine'} — started earlier</p>
+                </div>
+                <button
+                  onClick={() => {
+                    const r = routineMatch || plan.plan_routines?.[0]
+                    setSessionRoutine(r)
+                    setResumeSession(existingSession)
+                    setShowSessionLogger(true)
+                  }}
+                  className="px-3 py-1.5 rounded-lg text-body-sm font-bold bg-warning-600 text-neutral-white hover:bg-warning-700 transition-colors">
+                  ▶ Resume
+                </button>
+                <button
+                  onClick={() => setExistingSession(null)}
+                  className="text-warning-400 hover:text-warning-600 transition-colors" aria-label="Dismiss">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+              </div>
+            )
+          })()}
 
           {nonRestRoutines.length === 0 ? (
             <div className="py-16 flex flex-col items-center gap-3 border-2 border-dashed border-border-primary rounded-xl text-center">
@@ -659,7 +1084,10 @@ export default function WorkoutPlanPage() {
                   <div className="flex items-center gap-2">
                     <Button variant="workout-outline" size="sm" onClick={() => setActiveRoutine(routine)}>View</Button>
                     <Button variant="workout-outline" size="sm" onClick={() => { setEditingRoutine(routine); setShowEditRoutine(true) }}>Edit</Button>
-                    <Button variant="workout-primary" size="sm" onClick={() => { setActiveRoutine(routine); setShowLog(true) }}>Log</Button>
+                    <Button variant="workout-primary" size="sm"
+                      onClick={() => { setSessionRoutine(routine); setShowSessionLogger(true) }}>
+                      ▶ Start Session
+                    </Button>
                   </div>
                 </div>
               ))}
@@ -682,10 +1110,24 @@ export default function WorkoutPlanPage() {
         onRoutineUpdated={handleRoutineUpdated}
         onDeleteRoutine={handleDeleteRoutine}
       />
-      <LogWorkoutModal
-        open={showLog}
-        onClose={() => setShowLog(false)}
-        routine={activeRoutine || todayRoutine}
+
+      {/* ── Real workout session logger ── */}
+      <WorkoutSessionLogger
+        open={showSessionLogger}
+        onClose={() => {
+          setShowSessionLogger(false)
+          setSessionRoutine(null)
+          setResumeSession(null)
+        }}
+        routine={sessionRoutine}
+        planId={plan.id}
+        resumeSession={resumeSession}
+        onSessionCompleted={() => {
+          setShowSessionLogger(false)
+          setSessionRoutine(null)
+          setResumeSession(null)
+          setExistingSession(null)  // clear banner
+        }}
       />
       <EditPlanModal
         open={showEditPlan}

@@ -3,6 +3,9 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { cn } from '../components/utils.js'
 import { Button } from '../components/atoms/Button.jsx'
 import { getMeal, getMeals, getFilterOptions } from '../api/mealsService.js'
+import { getMealPlan } from '../api/mealPlansService.js'
+import { getActiveMealEnrollment, createEnrollment, updateEnrollmentStatus } from '../api/enrollmentService.js'
+import { createMealSchedule, updateMealEatenStatus, getEatenMeals } from '../api/mealTrackingService.js'
 
 
 
@@ -560,60 +563,106 @@ export default function MealPlanPage() {
   const navigate = useNavigate()
   const { id } = useParams()
 
-  const [plan] = useState(() => {
-    try {
-      const stored = localStorage.getItem('user_plans')
-      const plans = stored ? JSON.parse(stored) : []
-      const found = plans.find(p => p.id === id)
-      if (found) {
-        if (!found.calorieTarget && found.detail) {
-          const kcalMatch = found.detail.match(/(\d+)\s*kcal/i)
-          found.calorieTarget = kcalMatch ? parseInt(kcalMatch[1]) : 2000
-        }
-        return found
-      }
-    } catch (e) {
-      console.error(e)
-    }
-    return MOCK_PLAN
-  })
+  const [plan, setPlan]       = useState(null)
+  const [slots, setSlots]     = useState([])
+  const [pageLoading, setPageLoading] = useState(true)
+  const [pageError, setPageError]     = useState(null)
 
-  const [slots, setSlots] = useState(() => {
-    if (plan.slots) return plan.slots
-    if (plan.mealSlots) {
-      return plan.mealSlots.map(label => ({
-        id: label.toLowerCase(),
-        label: label,
-        time: label === 'Breakfast' ? '7:00 AM' : label === 'Lunch' ? '12:30 PM' : '7:00 PM',
-        meals: [],
-        selectedMealId: null,
-        taken: false
-      }))
+  // ── Load plan from backend + hydrate today's eaten state ────────────────────
+  useEffect(() => {
+    if (!id) return
+    let cancelled = false
+    async function load() {
+      setPageLoading(true)
+      setPageError(null)
+      try {
+        const data = await getMealPlan(id)
+        if (cancelled) return
+
+        const kcalMatch = (data.description || '').match(/(\d+)\s*kcal/i)
+        setPlan({ ...data, calorieTarget: kcalMatch ? parseInt(kcalMatch[1]) : 2000 })
+
+        const SLOT_TIMES = {
+          breakfast: '08:00 AM', lunch: '01:00 PM',
+          dinner: '07:00 PM', snack: '04:00 PM',
+        }
+        const mappedSlots = (data.slot_meals ?? []).map(s => ({
+          id: s.id,
+          meal_type: s.meal_type,
+          label: s.meal_type.charAt(0).toUpperCase() + s.meal_type.slice(1),
+          time: SLOT_TIMES[s.meal_type] ?? '12:00 PM',
+          taken: false,
+          scheduleId: null,
+          meals: s.meal ? [{
+            id: s.meal_id,
+            name: s.meal.title,
+            image: s.meal.image_url,
+            calories: s.meal.nutrition?.calories_cal ?? 0,
+            protein:  s.meal.nutrition?.protein_g ?? 0,
+            carbs:    s.meal.nutrition?.carbohydrates_g ?? 0,
+            fat:      s.meal.nutrition?.total_fat_g ?? 0,
+            warning:  null,
+          }] : [],
+          selectedMealId: s.meal_id ?? null,
+        }))
+
+        // Hydrate today's eaten state so checkboxes show the correct state on load
+        let eatenToday = []
+        try {
+          const todayStr = new Date().toISOString().split('T')[0]
+          const { results } = await getEatenMeals({ date: todayStr })
+          eatenToday = results || []
+        } catch (_) {}
+
+        const merged = mappedSlots.map(slot => {
+          const match = eatenToday.find(r => r.is_eaten && r.meal_id === slot.selectedMealId)
+          return match ? { ...slot, taken: true, scheduleId: match.id } : slot
+        })
+
+        if (!cancelled) setSlots(merged)
+      } catch (err) {
+        if (!cancelled) setPageError(err.message || 'Failed to load meal plan.')
+      } finally {
+        if (!cancelled) setPageLoading(false)
+      }
     }
-    return MOCK_SLOTS
-  })
+    load()
+    return () => { cancelled = true }
+  }, [id])
+
 
   const [showEditStructure, setShowEditStructure] = useState(false)
   const [editCollectionSlot, setEditCollectionSlot] = useState(null)
 
-  // Sync slots to localStorage for custom plans
-  useEffect(() => {
-    if (plan.id === 'diabetes-friendly') return
-    try {
-      const stored = localStorage.getItem('user_plans')
-      const plans = stored ? JSON.parse(stored) : []
-      const updated = plans.map(p => {
-        if (p.id === plan.id) {
-          return { ...p, slots }
-        }
-        return p
-      })
-      localStorage.setItem('user_plans', JSON.stringify(updated))
-    } catch (e) {
-      console.error(e)
-    }
-  }, [slots, plan.id])
+  // ── Enrollment ─────────────────────────────────────────────────────────
+  const [enrollment, setEnrollment] = useState(null)
+  const [enrolling, setEnrolling] = useState(false)
+  const [enrollError, setEnrollError] = useState('')
 
+  useEffect(() => {
+    getActiveMealEnrollment()
+      .then(e => { if (e.meal_plan_id === id) setEnrollment(e) })
+      .catch(() => {})
+  }, [id])
+
+  async function handleEnroll() {
+    setEnrolling(true); setEnrollError('')
+    try {
+      const e = await createEnrollment({ mealPlanId: id })
+      setEnrollment(e)
+    } catch (err) { setEnrollError(err.message) }
+    finally { setEnrolling(false) }
+  }
+
+  async function handleEnrollStatus(newStatus) {
+    if (!enrollment) return
+    setEnrolling(true); setEnrollError('')
+    try {
+      const e = await updateEnrollmentStatus(enrollment.id, newStatus)
+      setEnrollment(e)
+    } catch (err) { setEnrollError(err.message) }
+    finally { setEnrolling(false) }
+  }
   const totalCalories = slots.reduce((sum, slot) => {
     const meal = slot.meals.find(m => m.id === slot.selectedMealId) || slot.meals[0]
     return sum + (slot.taken && meal ? meal.calories : 0)
@@ -624,8 +673,43 @@ export default function MealPlanPage() {
     return sum + (meal ? meal.calories : 0)
   }, 0)
 
-  function toggleTaken(slotId) {
-    setSlots(s => s.map(sl => sl.id === slotId ? { ...sl, taken: !sl.taken } : sl))
+  async function toggleTaken(slotId) {
+    const slot = slots.find(sl => sl.id === slotId)
+    if (!slot) return
+    const meal = slot.meals.find(m => m.id === slot.selectedMealId) || slot.meals[0]
+    if (!meal) return
+    if (!slot.taken) {
+      setSlots(s => s.map(sl => sl.id === slotId ? { ...sl, taken: true } : sl))
+      try {
+        const todayIso = new Date().toISOString()
+        const rawType = (slot.meal_type || slot.label || 'snack').toLowerCase().replace(/[^a-z]/g, '')
+        const validType = ['breakfast','lunch','dinner','snack'].includes(rawType) ? rawType : 'snack'
+        const record = await createMealSchedule({
+          meal_id: meal.id,
+          scheduled_date: todayIso,
+          meal_type: validType,
+          is_eaten: true,
+          eaten_date: todayIso,
+        })
+        setSlots(s => s.map(sl => sl.id === slotId ? { ...sl, scheduleId: record.id } : sl))
+        window.dispatchEvent(new CustomEvent('sidebarStatsRefresh'))
+      } catch (err) {
+        setSlots(s => s.map(sl => sl.id === slotId ? { ...sl, taken: false } : sl))
+        console.error('Failed to mark meal taken:', err.message)
+      }
+    } else {
+      setSlots(s => s.map(sl => sl.id === slotId ? { ...sl, taken: false } : sl))
+      if (slot.scheduleId) {
+        try {
+          await updateMealEatenStatus(slot.scheduleId, false)
+          window.dispatchEvent(new CustomEvent('sidebarStatsRefresh'))
+        }
+        catch (err) {
+          setSlots(s => s.map(sl => sl.id === slotId ? { ...sl, taken: true } : sl))
+          console.error('Failed to unmark meal:', err.message)
+        }
+      }
+    }
   }
 
   function selectMeal(slotId, mealId) {
@@ -659,15 +743,31 @@ export default function MealPlanPage() {
     ))
   }
 
-  const caloriePct = Math.min(100, Math.round((totalCalories / plan.calorieTarget) * 100))
+  const caloriePct = Math.min(100, Math.round((totalCalories / (plan?.calorieTarget || 2000)) * 100))
   const takenCount = slots.filter(s => s.taken).length
+
+  // ── Loading / error screens ──────────────────────────────────────────
+  if (pageLoading) return (
+    <div className="flex flex-col min-h-screen items-center justify-center gap-4 bg-surface-page">
+      <div className="w-10 h-10 border-4 border-meals-prim border-t-transparent rounded-full animate-spin" />
+      <p className="text-body-md text-text-disabled font-medium">Loading meal plan...</p>
+    </div>
+  )
+
+  if (pageError || !plan) return (
+    <div className="flex flex-col min-h-screen items-center justify-center gap-4 bg-surface-page px-8">
+      <p className="text-body-lg font-bold text-text-headings">Failed to load plan</p>
+      <p className="text-body-md text-text-disabled text-center">{pageError || 'Plan not found.'}</p>
+      <button onClick={() => navigate(-1)} className="text-meals-prim font-semibold underline text-body-md">Go back</button>
+    </div>
+  )
 
   return (
     <div className="flex flex-col min-h-screen bg-surface-page">
 
       {/* ── Banner ── */}
       <div className="relative h-56 shrink-0 overflow-hidden">
-        <img src={plan.image || 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=1200&q=80'} alt={plan.name} className="w-full h-full object-cover" />
+        <img src={plan.image_url || 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=1200&q=80'} alt={plan.title} className="w-full h-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-t from-neutral-black via-neutral-black/40 to-transparent" />
         <div className="absolute inset-0 flex flex-col justify-between p-6">
           <button onClick={() => navigate(-1)}
@@ -679,10 +779,10 @@ export default function MealPlanPage() {
             <div>
               <div className="flex items-center gap-2 mb-1">
                 <span className="bg-meals-prim-100 text-meals-prim text-body-sm font-bold px-2 py-0.5 rounded-round">Diet</span>
-                <span className="bg-error-100 text-error-500 text-body-sm font-bold px-2 py-0.5 rounded-round">{plan.level || plan.condition || 'General Health'}</span>
+                <span className="bg-error-100 text-error-500 text-body-sm font-bold px-2 py-0.5 rounded-round">{plan.goal_type || plan.level || plan.condition || 'General Health'}</span>
               </div>
-              <h1 className="text-heading-h4 font-bold text-neutral-white">{plan.name}</h1>
-              <p className="text-body-sm text-neutral-200">{plan.dateRange || `${plan.startDate} → ${plan.endDate}`}</p>
+              <h1 className="text-heading-h4 font-bold text-neutral-white">{plan.title || plan.name}</h1>
+              <p className="text-body-sm text-neutral-200">{plan.dateRange || (plan.start_date && plan.end_date ? `${plan.start_date} → ${plan.end_date}` : 'Ongoing')}</p>
             </div>
             <Button variant="meals-outline" size="sm" className="border-neutral-white text-neutral-white hover:bg-neutral-white/10" onClick={() => setShowEditStructure(true)}>Edit</Button>
           </div>
@@ -709,6 +809,64 @@ export default function MealPlanPage() {
         <div className="flex items-center gap-2 shrink-0">
           <span className="text-body-sm text-text-disabled">Planned:</span>
           <span className="text-body-sm font-semibold text-text-headings">{plannedCalories} kcal</span>
+        </div>
+
+        {/* ── Inline enrollment row ── */}
+        <div className="w-full flex items-center gap-3 flex-wrap pt-1 border-t border-border-primary mt-1">
+          <span className="text-body-sm font-bold text-text-headings">Enrollment:</span>
+          {enrollment ? (
+            <>
+              <span className={cn(
+                'text-body-xs font-bold px-2.5 py-1 rounded-full border',
+                enrollment.status === 'active'    && 'bg-success-100 text-success-700 border-success-200',
+                enrollment.status === 'paused'    && 'bg-warning-100 text-warning-700 border-warning-200',
+                enrollment.status === 'completed' && 'bg-information-100 text-information-700 border-information-200',
+                enrollment.status === 'dropped'   && 'bg-error-100 text-error-600 border-error-200',
+              )}>
+                {enrollment.status.charAt(0).toUpperCase() + enrollment.status.slice(1)}
+              </span>
+              {enrollment.status === 'active' && (
+                <>
+                  <button onClick={() => handleEnrollStatus('paused')} disabled={enrolling}
+                    className="px-3 py-1 rounded-lg text-body-xs font-bold border border-warning-300 text-warning-700 bg-warning-50 hover:bg-warning-100 transition-colors disabled:opacity-50">
+                    {enrolling ? '…' : '⏸ Pause'}
+                  </button>
+                  <button onClick={() => handleEnrollStatus('completed')} disabled={enrolling}
+                    className="px-3 py-1 rounded-lg text-body-xs font-bold border border-information-300 text-information-700 bg-information-50 hover:bg-information-100 transition-colors disabled:opacity-50">
+                    {enrolling ? '…' : '✓ Complete'}
+                  </button>
+                  <button onClick={() => handleEnrollStatus('dropped')} disabled={enrolling}
+                    className="px-3 py-1 rounded-lg text-body-xs font-bold border border-error-200 text-error-500 bg-error-50 hover:bg-error-100 transition-colors disabled:opacity-50">
+                    {enrolling ? '…' : '✕ Drop'}
+                  </button>
+                </>
+              )}
+              {enrollment.status === 'paused' && (
+                <>
+                  <button onClick={() => handleEnrollStatus('active')} disabled={enrolling}
+                    className="px-3 py-1 rounded-lg text-body-xs font-bold bg-success-600 text-neutral-white hover:bg-success-700 transition-colors disabled:opacity-50">
+                    {enrolling ? '…' : '▶ Resume'}
+                  </button>
+                  <button onClick={() => handleEnrollStatus('dropped')} disabled={enrolling}
+                    className="px-3 py-1 rounded-lg text-body-xs font-bold border border-error-200 text-error-500 bg-error-50 hover:bg-error-100 transition-colors disabled:opacity-50">
+                    {enrolling ? '…' : '✕ Drop'}
+                  </button>
+                </>
+              )}
+              {(enrollment.status === 'completed' || enrollment.status === 'dropped') && (
+                <button onClick={handleEnroll} disabled={enrolling}
+                  className="px-3 py-1 rounded-lg text-body-xs font-bold bg-success-600 text-neutral-white hover:bg-success-700 transition-colors disabled:opacity-50">
+                  {enrolling ? '…' : '↩ Re-enroll'}
+                </button>
+              )}
+            </>
+          ) : (
+            <button onClick={handleEnroll} disabled={enrolling}
+              className="px-4 py-1.5 rounded-lg text-body-sm font-bold bg-meals-prim text-neutral-white hover:bg-meals-prim/90 transition-colors shadow-sm disabled:opacity-50">
+              {enrolling ? 'Enrolling…' : '+ Enroll in This Plan'}
+            </button>
+          )}
+          {enrollError && <span className="text-body-xs text-text-error ml-auto">{enrollError}</span>}
         </div>
       </div>
 

@@ -3,15 +3,14 @@ import { Button } from "../components/atoms/Button.jsx";
 import { cn } from "../components/utils.js";
 import { DefinedField } from "../components/molecules/DefinedField.jsx";
 import { getMeals, getFilterOptions, getMeal } from "../api/mealsService.js";
+import { getMealPlans, addMealSlot } from "../api/mealPlansService.js";
 
 export default function MealsPage() {
-  const [activeTab, setActiveTab] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedMeal, setSelectedMeal] = useState(null);
-
-  // New States for API integration
+  const [filterGroups, setFilterGroups] = useState([]); // [{ name, tags }]
+  const [activeFilters, setActiveFilters] = useState({}); // { groupName: selectedTag }
   const [meals, setMeals] = useState([]);
-  const [tags, setTags] = useState([]);
   const [totalRecords, setTotalRecords] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [useProfile, setUseProfile] = useState(false);
@@ -24,41 +23,42 @@ export default function MealsPage() {
   const [showAddToPlanModal, setShowAddToPlanModal] = useState(false);
   const [mealToAddToPlan, setMealToAddToPlan] = useState(null);
   const [targetPlanId, setTargetPlanId] = useState("");
-  const [targetSlot, setTargetSlot] = useState("");
+  const [targetSlot, setTargetSlot] = useState("Breakfast");
   const [toastMessage, setToastMessage] = useState("");
+  const [isAddingToPlan, setIsAddingToPlan] = useState(false);
 
-  // Load plans and filters on component mount
+  // Meal slot labels shown in the UI → backend meal_type values
+  const MEAL_SLOTS = ["Breakfast", "Lunch", "Dinner", "Snack"];
+  function labelToMealType(label) {
+    return label.toLowerCase().replace("snacks", "snack");
+  }
+
+  // Load plans from backend + filters on component mount
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem("user_plans");
-      const parsed = stored ? JSON.parse(stored) : [];
-      const dietPlans = parsed.filter((p) => p.defaultTab === "Diet");
-      setUserPlans(dietPlans);
-      if (dietPlans.length > 0) {
-        setTargetPlanId(dietPlans[0].id);
-        const slots = dietPlans[0].mealSlots ||
-          dietPlans[0].rawMealSlots || [
-            "Breakfast",
-            "Lunch",
-            "Dinner",
-            "Snacks",
-          ];
-        setTargetSlot(slots[0]);
-      }
-    } catch (e) {
-      console.error(e);
-    }
-
-    // Fetch tags
-    const fetchTags = async () => {
+    // Fetch user's meal plans from backend
+    const fetchPlans = async () => {
       try {
-        const res = await getFilterOptions();
-        setTags(res.tags || []);
+        const plans = await getMealPlans();
+        setUserPlans(plans || []);
+        if (plans && plans.length > 0) {
+          setTargetPlanId(plans[0].id);
+        }
       } catch (err) {
-        console.error("Failed to fetch tags", err);
+        console.error("Failed to fetch meal plans", err);
       }
     };
-    fetchTags();
+    fetchPlans();
+
+    // Fetch filter groups from the backend
+    const fetchFilters = async () => {
+      try {
+        const res = await getFilterOptions();
+        setFilterGroups(res.groups || []);
+      } catch (err) {
+        console.error("Failed to fetch filter options", err);
+      }
+    };
+    fetchFilters();
   }, []);
 
   // Fetch meals when filters or page change
@@ -70,7 +70,8 @@ export default function MealsPage() {
           page: currentPage,
           page_size: pageSize,
           search: searchQuery,
-          tag: activeTab,
+          // Collect the first selected tag across all groups
+          tag: Object.values(activeFilters).find(Boolean) || undefined,
           use_profile: useProfile,
         });
         
@@ -88,12 +89,36 @@ export default function MealsPage() {
       fetchMeals();
     }, 300);
     return () => clearTimeout(timeoutId);
-  }, [currentPage, searchQuery, activeTab, useProfile]);
+  }, [currentPage, searchQuery, activeFilters, useProfile]);
 
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, activeTab, useProfile]);
+  }, [searchQuery, activeFilters, useProfile]);
+
+  // Handle a group dropdown selection — selecting in one group clears others
+  function handleGroupFilter(groupName, tagValue) {
+    setActiveFilters(prev => {
+      if (prev[groupName] === tagValue) {
+        // Clicking the same tag again deselects it
+        const next = { ...prev };
+        delete next[groupName];
+        return next;
+      }
+      // Only one active tag at a time (API takes a single `tag` param)
+      const fresh = {};
+      if (tagValue) fresh[groupName] = tagValue;
+      return fresh;
+    });
+  }
+
+  function clearAllFilters() {
+    setActiveFilters({});
+    setSearchQuery('');
+    setUseProfile(false);
+  }
+
+  const hasActiveFilters = Object.keys(activeFilters).length > 0 || !!searchQuery || useProfile;
 
   // Fetch detailed meal
   const handleMealClick = async (mealItem) => {
@@ -117,80 +142,41 @@ export default function MealsPage() {
     }
   };
 
-  // Dynamic slot updating when plan selection changes
+  // Plan selection change — reset slot to Breakfast
   const handlePlanChange = (planId) => {
     setTargetPlanId(planId);
-    const selectedPlan = userPlans.find((p) => p.id === planId);
-    if (selectedPlan) {
-      const slots = selectedPlan.mealSlots ||
-        selectedPlan.rawMealSlots || ["Breakfast", "Lunch", "Dinner", "Snacks"];
-      setTargetSlot(slots[0]);
-    }
+    setTargetSlot("Breakfast");
   };
 
-  // Add meal to selected plan & slot in LocalStorage
-  const handleAddMealToPlan = () => {
+  // Add meal to selected plan & slot via backend POST /meal/plans/{id}/slots
+  const handleAddMealToPlan = async () => {
     if (!targetPlanId || !targetSlot || !mealToAddToPlan) return;
 
+    setIsAddingToPlan(true);
     try {
-      const stored = localStorage.getItem("user_plans");
-      const parsed = stored ? JSON.parse(stored) : [];
-
-      const updatedPlans = parsed.map((plan) => {
-        if (plan.id === targetPlanId) {
-          if (!plan.slots) {
-            const slotsToUse = plan.mealSlots ||
-              plan.rawMealSlots || ["Breakfast", "Lunch", "Dinner", "Snacks"];
-            plan.slots = slotsToUse.map((label) => ({
-              id: label.toLowerCase(),
-              label: label,
-              time:
-                label === "Breakfast"
-                  ? "7:00 AM"
-                  : label === "Lunch"
-                    ? "12:30 PM"
-                    : "7:00 PM",
-              meals: [],
-              selectedMealId: null,
-              taken: false,
-            }));
-          }
-
-          plan.slots = plan.slots.map((s) => {
-            if (s.label.toLowerCase() === targetSlot.toLowerCase()) {
-              const exists = s.meals.some((m) => m.id === mealToAddToPlan.id);
-              if (!exists) {
-                s.meals.push({
-                  id: mealToAddToPlan.id,
-                  name: mealToAddToPlan.title, // Backend uses title
-                  calories: mealToAddToPlan.nutrition?.calories_cal || 0,
-                  protein: mealToAddToPlan.nutrition?.protein_g || 0,
-                  carbs: mealToAddToPlan.nutrition?.carbohydrates_g || 0,
-                  fat: mealToAddToPlan.nutrition?.total_fat_g || 0,
-                  image: mealToAddToPlan.image_url,
-                  warning: null,
-                });
-              }
-              s.selectedMealId = mealToAddToPlan.id;
-            }
-            return s;
-          });
-        }
-        return plan;
+      const meal_type = labelToMealType(targetSlot); // e.g. "breakfast"
+      await addMealSlot(targetPlanId, {
+        meal_id: mealToAddToPlan.id,
+        meal_type,
       });
 
-      localStorage.setItem("user_plans", JSON.stringify(updatedPlans));
-
-      const planName =
-        userPlans.find((p) => p.id === targetPlanId)?.name || "Plan";
+      const planName = userPlans.find((p) => p.id === targetPlanId)?.title || "Plan";
       setToastMessage(
         `"${mealToAddToPlan.title}" added to ${targetSlot} in "${planName}"!`,
       );
       setShowAddToPlanModal(false);
-
       setTimeout(() => setToastMessage(""), 3000);
     } catch (e) {
-      console.error(e);
+      // 409 means this meal is already in that slot — show friendly message
+      if (e.message?.includes("409") || e.message?.toLowerCase().includes("already") || e.message?.toLowerCase().includes("duplicate")) {
+        setToastMessage(`"${mealToAddToPlan.title}" is already in that slot.`);
+      } else {
+        setToastMessage(`Failed to add meal: ${e.message}`);
+      }
+      setShowAddToPlanModal(false);
+      setTimeout(() => setToastMessage(""), 4000);
+    } finally {
+      setIsAddingToPlan(false);
     }
   };
 
@@ -218,9 +204,12 @@ export default function MealsPage() {
       )}
 
       {/* ── Header Area ── */}
-      <div className="shrink-0 bg-surface-primary border-b border-border-primary pt-12 pb-8 px-8 md:px-12 relative overflow-hidden animate-fade-in">
-        <div className="absolute top-[-50px] right-[-50px] w-64 h-64 bg-meals-prim rounded-full opacity-30 blur-3xl" />
-        <div className="absolute bottom-[-50px] left-[10%] w-48 h-48 bg-meals-sec rounded-full opacity-25 blur-3xl" />
+      <div className="shrink-0 bg-surface-primary border-b border-border-primary pt-12 pb-8 px-8 md:px-12 relative animate-fade-in">
+        {/* Decorative blobs — clipped independently so they don't affect dropdown overflow */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute top-[-50px] right-[-50px] w-64 h-64 bg-meals-prim rounded-full opacity-30 blur-3xl" />
+          <div className="absolute bottom-[-50px] left-[10%] w-48 h-48 bg-meals-sec rounded-full opacity-25 blur-3xl" />
+        </div>
 
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="flex flex-col gap-2">
@@ -273,34 +262,39 @@ export default function MealsPage() {
           </div>
         </div>
 
-        {/* Dynamic Tab Filters */}
-        <div className="flex flex-wrap gap-2 mt-8 bg-neutral-100 p-1.5 rounded-xl border border-border-primary w-fit relative z-10">
-          <button
-            onClick={() => setActiveTab("all")}
-            className={cn(
-              "px-4 py-1.5 rounded-lg text-body-sm font-semibold transition-all capitalize",
-              activeTab === "all"
-                ? "bg-surface-primary text-meals-prim shadow-sm border border-border-primary"
-                : "text-text-disabled hover:text-text-headings",
+        {/* ── Filter Dropdowns (one per group from /meals/filters) ── */}
+        {filterGroups.length > 0 && (
+          <div className="mt-8 relative z-50 flex flex-wrap items-end gap-3">
+            {filterGroups.map((group) => {
+              const activeTag = activeFilters[group.name]
+              return (
+                <DefinedField
+                  key={group.name}
+                  id={`filter-${group.name.replace(/\s+/g, '-').toLowerCase()}`}
+                  label={group.name}
+                  placeholder={`All ${group.name}`}
+                  value={activeTag || ''}
+                  options={group.tags.map(tag => ({ value: tag, label: tag }))}
+                  onChange={(val) => handleGroupFilter(group.name, val)}
+                  className="w-48 shrink-0"
+                />
+              )
+            })}
+
+            {/* Clear all pill — only shown when something is active */}
+            {hasActiveFilters && (
+              <button
+                onClick={clearAllFilters}
+                className="mb-0.5 flex items-center gap-1.5 px-3 py-2 rounded-lg text-body-sm font-semibold border border-border-primary text-text-disabled hover:border-meals-prim hover:text-meals-prim transition-colors bg-surface-primary shrink-0"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+                Clear Filters
+              </button>
             )}
-          >
-            All
-          </button>
-          {tags.map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={cn(
-                "px-4 py-1.5 rounded-lg text-body-sm font-semibold transition-all capitalize",
-                activeTab === tab
-                  ? "bg-surface-primary text-meals-prim shadow-sm border border-border-primary"
-                  : "text-text-disabled hover:text-text-headings",
-              )}
-            >
-              {tab}
-            </button>
-          ))}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* ── Grid List Content ── */}
@@ -698,7 +692,7 @@ export default function MealsPage() {
                     onChange={handlePlanChange}
                     options={userPlans.map((plan) => ({
                       value: plan.id,
-                      label: plan.name,
+                      label: plan.title,
                     }))}
                     className="mb-4"
                   />
@@ -708,16 +702,7 @@ export default function MealsPage() {
                     label="Meal Slot"
                     value={targetSlot}
                     onChange={setTargetSlot}
-                    options={(
-                      userPlans.find((p) => p.id === targetPlanId)?.mealSlots ||
-                      userPlans.find((p) => p.id === targetPlanId)
-                        ?.rawMealSlots || [
-                        "Breakfast",
-                        "Lunch",
-                        "Dinner",
-                        "Snacks",
-                      ]
-                    ).map((slot) => ({ value: slot, label: slot }))}
+                    options={MEAL_SLOTS.map((slot) => ({ value: slot, label: slot }))}
                   />
                 </>
               ) : (
@@ -743,10 +728,10 @@ export default function MealsPage() {
               <Button
                 variant="meals-primary"
                 className="flex-1 font-bold shadow-md"
-                disabled={userPlans.length === 0}
+                disabled={userPlans.length === 0 || isAddingToPlan}
                 onClick={handleAddMealToPlan}
               >
-                Confirm Add
+                {isAddingToPlan ? "Adding..." : "Confirm Add"}
               </Button>
             </div>
           </div>

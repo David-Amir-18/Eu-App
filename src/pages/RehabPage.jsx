@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Button } from '../components/atoms/Button.jsx'
 import { DefinedField } from '../components/molecules/DefinedField.jsx'
-import { getRehabExercises } from '../api/rehabService.js'
+import { getRehabExercises, getMyRehabPlans, getRehabPlan, addExerciseToRehabRoutine } from '../api/rehabService.js'
 
 export default function RehabPage() {
   const [exercises, setExercises] = useState([])
@@ -18,87 +18,66 @@ export default function RehabPage() {
   const [exerciseToAddToPlan, setExerciseToAddToPlan] = useState(null)
   const [targetPlanId, setTargetPlanId] = useState('')
   const [targetRoutineId, setTargetRoutineId] = useState('')
+  const [targetPlanRoutines, setTargetPlanRoutines] = useState([]) // real routine objects with UUIDs
+  const [isAddingToPlan, setIsAddingToPlan] = useState(false)
   const [toastMessage, setToastMessage] = useState('')
 
-  // Load user plans from localStorage on component mount
+  // Load rehab plans from backend on mount
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem('user_plans')
-      const parsed = stored ? JSON.parse(stored) : []
-      // Filter Rehab plans
-      const rehabPlans = parsed.filter(p => p.defaultTab === 'Rehab')
-      setUserPlans(rehabPlans)
-      if (rehabPlans.length > 0) {
-        setTargetPlanId(rehabPlans[0].id)
-        // Set default day slot
-        const activeDays = rehabPlans[0].rawRehabDays || ['Mon', 'Tue', 'Thu', 'Fri']
-        setTargetRoutineId(activeDays[0])
+    const fetchPlans = async () => {
+      try {
+        const plans = await getMyRehabPlans()
+        setUserPlans(plans || [])
+        if (plans && plans.length > 0) {
+          setTargetPlanId(plans[0].id)
+          // Fetch full plan to get routines with real IDs
+          const full = await getRehabPlan(plans[0].id)
+          const routines = full.routines || []
+          setTargetPlanRoutines(routines)
+          if (routines.length > 0) setTargetRoutineId(routines[0].id)
+        }
+      } catch (e) {
+        console.error('Failed to load rehab plans', e)
       }
-    } catch (e) {
-      console.error('Failed to read local plans', e)
     }
+    fetchPlans()
   }, [])
 
-  // Handle switching selected target plan inside the modal
-  const handlePlanChange = (planId) => {
+  // When plan changes, load its routines to get real IDs
+  const handlePlanChange = async (planId) => {
     setTargetPlanId(planId)
-    const selectedPlan = userPlans.find(p => p.id === planId)
-    if (selectedPlan) {
-      const activeDays = selectedPlan.rawRehabDays || ['Mon', 'Tue', 'Thu', 'Fri']
-      setTargetRoutineId(activeDays[0])
+    setTargetRoutineId('')
+    try {
+      const full = await getRehabPlan(planId)
+      const routines = full.routines || []
+      setTargetPlanRoutines(routines)
+      if (routines.length > 0) setTargetRoutineId(routines[0].id)
+    } catch (e) {
+      console.error('Failed to load rehab routines', e)
     }
   }
 
-  // Execute saving user selected exercise back to the target plan's slot inside localStorage
-  const handleAddExerciseToPlan = () => {
-    if (!targetPlanId || !targetRoutineId || !exerciseToAddToPlan) return
+  // Add exercise to routine via backend POST /rehab/routines/{routineId}/exercises
+  const handleAddExerciseToPlan = async () => {
+    if (!targetRoutineId || !exerciseToAddToPlan) return
 
+    setIsAddingToPlan(true)
     try {
-      const stored = localStorage.getItem('user_plans')
-      const parsed = stored ? JSON.parse(stored) : []
-
-      const updatedPlans = parsed.map(plan => {
-        if (plan.id === targetPlanId) {
-          // Dynamically populate routines array if it's not initialized for standard custom rehab
-          if (!plan.routines || plan.routines.length === 0) {
-            const activeDays = plan.rawRehabDays || ['Mon', 'Tue', 'Thu', 'Fri']
-            plan.routines = activeDays.map(day => ({
-              id: day.toLowerCase(),
-              name: day,
-              exercises: []
-            }))
-          }
-
-          // Insert exercise title under the targeted routine slot day
-          plan.routines = plan.routines.map(r => {
-            if (r.name.toLowerCase() === targetRoutineId.toLowerCase()) {
-              // In rehab, exercises are stored as full title/taken objects
-              const rawExList = r.exercises.map(ex => typeof ex === 'string' ? ex : ex.title)
-              if (!rawExList.includes(exerciseToAddToPlan.title)) {
-                r.exercises.push({
-                  title: exerciseToAddToPlan.title,
-                  thumbnail_url: exerciseToAddToPlan.thumbnail_url || null,
-                  taken: false
-                })
-              }
-            }
-            return r
-          })
-        }
-        return plan
+      await addExerciseToRehabRoutine(targetRoutineId, {
+        exercise_id: exerciseToAddToPlan.id,
       })
 
-      localStorage.setItem('user_plans', JSON.stringify(updatedPlans))
-
-      // Trigger visual toast feedback
-      const planName = userPlans.find(p => p.id === targetPlanId)?.name || 'Plan'
-      setToastMessage(`"${exerciseToAddToPlan.title}" successfully added to ${targetRoutineId} in "${planName}"!`)
+      const planName = userPlans.find(p => p.id === targetPlanId)?.title || 'Plan'
+      const routineName = targetPlanRoutines.find(r => r.id === targetRoutineId)?.name || targetRoutineId
+      setToastMessage(`"${exerciseToAddToPlan.title}" successfully added to ${routineName} in "${planName}"!`)
       setShowAddToPlanModal(false)
-
-      // Reset toast state automatically after 3 seconds
       setTimeout(() => setToastMessage(''), 3000)
     } catch (err) {
-      console.error(err)
+      setToastMessage(`Failed to add exercise: ${err.message}`)
+      setShowAddToPlanModal(false)
+      setTimeout(() => setToastMessage(''), 4000)
+    } finally {
+      setIsAddingToPlan(false)
     }
   }
 
@@ -379,7 +358,7 @@ export default function RehabPage() {
                     label="Target Rehab Plan"
                     value={targetPlanId}
                     onChange={handlePlanChange}
-                    options={userPlans.map(plan => ({ value: plan.id, label: plan.name }))}
+                    options={userPlans.map(plan => ({ value: plan.id, label: plan.title }))}
                     className="mb-4"
                   />
 
@@ -388,7 +367,7 @@ export default function RehabPage() {
                     label="Recovery Day / Slot"
                     value={targetRoutineId}
                     onChange={setTargetRoutineId}
-                    options={(userPlans.find(p => p.id === targetPlanId)?.rawRehabDays || ['Mon', 'Tue', 'Thu', 'Fri']).map(day => ({ value: day, label: day }))}
+                    options={targetPlanRoutines.map(r => ({ value: r.id, label: r.name }))}
                   />
                 </>
               ) : (
@@ -410,10 +389,10 @@ export default function RehabPage() {
               <Button
                 variant="rehab-primary"
                 className="flex-1 shadow-md"
-                disabled={userPlans.length === 0}
+                disabled={userPlans.length === 0 || !targetRoutineId || isAddingToPlan}
                 onClick={handleAddExerciseToPlan}
               >
-                Confirm Add
+                {isAddingToPlan ? 'Adding...' : 'Confirm Add'}
               </Button>
             </div>
 

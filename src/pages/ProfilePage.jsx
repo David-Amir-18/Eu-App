@@ -1,23 +1,92 @@
 import { useState, useEffect } from 'react'
 import { getUserMetrics, saveUserMetrics, getMe } from '../api/authService.js'
 import { cn } from '../components/utils.js'
-import { Menu } from '../components/molecules/Menu.jsx'
+import { DefinedField } from '../components/molecules/DefinedField.jsx'
 
+// ── Dropdown option sets (mirrors OnboardingPage) ──────────────────────────────
+
+function range(start, end, step = 1) {
+  const result = []
+  for (let i = start; i <= end; i += step) result.push(i)
+  return result
+}
+
+const AGE_OPTIONS = range(5, 100).map((v) => ({ value: String(v), label: `${v} years` }))
+const WEIGHT_OPTIONS = range(20, 300, 0.5).map((v) => ({ value: String(v), label: `${v} kg` }))
+const HEIGHT_OPTIONS = range(50, 280).map((v) => ({ value: String(v), label: `${v} cm` }))
+
+const GENDER_OPTIONS = [
+  { value: 'male',   label: '♂  Male' },
+  { value: 'female', label: '♀  Female' },
+]
+
+const PRIMARY_GOAL_OPTIONS = [
+  { value: 'general',      label: '  General Fitness' },
+  { value: 'weight_loss',  label: '  Weight Loss' },
+  { value: 'muscle_gain',  label: '  Muscle Gain' },
+  { value: 'rehab',        label: '  Rehabilitation' },
+]
+
+const FITNESS_LEVEL_OPTIONS = [
+  { value: 'Beginner',     label: '🌱  Beginner' },
+  { value: 'Intermediate', label: '⚡  Intermediate' },
+  { value: 'Advanced',     label: '🔥  Advanced' },
+]
+
+const ACTIVITY_LEVEL_OPTIONS = [
+  { value: 'Sedentary',         label: '  Sedentary' },
+  { value: 'Lightly Active',    label: '  Lightly Active' },
+  { value: 'Moderately Active', label: '  Moderately Active' },
+  { value: 'Very Active',       label: '  Very Active' },
+  { value: 'Extra Active',      label: '  Extra Active' },
+]
+
+const CALORIE_OPTIONS = [
+  { value: '', label: 'Auto (calculated by app)' },
+  ...range(1000, 4000, 100).map((v) => ({ value: String(v), label: `${v} kcal / day` })),
+]
+
+const RECOVERY_STAGE_OPTIONS = [
+  { value: '',          label: 'Not applicable' },
+  { value: 'acute',     label: '  Acute (0–6 weeks)' },
+  { value: 'sub-acute', label: '  Sub-acute (6 wks – 3 months)' },
+  { value: 'chronic',   label: '  Chronic (3+ months)' },
+]
+
+const INJURY_DETAIL_OPTIONS = [
+  { value: '',                   label: 'No specific injury' },
+  { value: 'Lower back pain',    label: '  Lower Back Pain' },
+  { value: 'Knee injury',        label: '  Knee Injury' },
+  { value: 'Shoulder injury',    label: '  Shoulder Injury' },
+  { value: 'Hip injury',         label: '  Hip Injury' },
+  { value: 'Ankle/foot injury',  label: '  Ankle / Foot Injury' },
+  { value: 'Neck pain',          label: '  Neck Pain' },
+  { value: 'Post-surgery rehab', label: '  Post-Surgery Rehab' },
+  { value: 'Chronic fatigue',    label: '  Chronic Fatigue' },
+  { value: 'Other',              label: '  Other' },
+]
+
+const DIET_NOTES_OPTIONS = [
+  { value: '',                      label: 'No dietary restrictions' },
+  { value: 'Vegetarian',            label: '  Vegetarian' },
+  { value: 'Vegan',                 label: '  Vegan' },
+  { value: 'Gluten-free',           label: '  Gluten-Free' },
+  { value: 'Dairy-free',            label: '  Dairy-Free' },
+  { value: 'Diabetic',              label: '  Diabetic Diet' },
+  { value: 'Low sodium',            label: '  Low Sodium' },
+  { value: 'Low fat',               label: '  Low Fat' },
+  { value: 'High protein',          label: '  High Protein' },
+  { value: 'Keto',                  label: '  Keto' },
+  { value: 'Intermittent fasting',  label: ' Intermittent Fasting' },
+]
 
 // ── Icons ──────────────────────────────────────────────────────────────────────
+
 function IconEdit() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none"
       stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
-    </svg>
-  )
-}
-
-function IconFire() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M12 2c0 0-4 4-4 8a4 4 0 004 4 4 4 0 004-4c0-1.5-.75-3-1.5-4C14 8 12 2 12 2zm0 14a2 2 0 01-2-2c0-1.5 1-3 2-4 1 1 2 2.5 2 4a2 2 0 01-2 2z" />
     </svg>
   )
 }
@@ -41,18 +110,8 @@ function IconApple() {
   )
 }
 
-function IconChart() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M12 20V10" />
-      <path d="M18 20V4" />
-      <path d="M6 20v-4" />
-    </svg>
-  )
-}
+// ── Sub-components ─────────────────────────────────────────────────────────────
 
-// ── Personal Data Card ─────────────────────────────────────────────────────────
 function DataCard({ label, value, unit, detail }) {
   return (
     <div className="bg-surface-primary border border-border-primary rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between">
@@ -61,14 +120,11 @@ function DataCard({ label, value, unit, detail }) {
         <span className="text-heading-h3 font-bold text-text-headings">{value}</span>
         {unit && <span className="text-body-md text-text-disabled font-medium">{unit}</span>}
       </div>
-      {detail && (
-        <span className="mt-1 text-body-sm text-text-body">{detail}</span>
-      )}
+      {detail && <span className="mt-1 text-body-sm text-text-body">{detail}</span>}
     </div>
   )
 }
 
-// ── Stat Card ──────────────────────────────────────────────────────────────────
 function StatCard({ title, value, subtitle, icon, colorClass, bgClass }) {
   return (
     <div className={cn("rounded-xl p-5 border border-border-primary shadow-sm flex items-start gap-4 hover:-translate-y-1 transition-transform", bgClass)}>
@@ -84,23 +140,31 @@ function StatCard({ title, value, subtitle, icon, colorClass, bgClass }) {
   )
 }
 
+// ── Section header for the modal ───────────────────────────────────────────────
+function ModalSection({ title }) {
+  return (
+    <p className="text-body-xs font-bold text-text-disabled uppercase tracking-widest pt-2 border-t border-border-primary mt-2">
+      {title}
+    </p>
+  )
+}
+
+// ── Main component ─────────────────────────────────────────────────────────────
 
 export default function ProfilePage() {
-  const [user, setUser] = useState(null)
+  const [user, setUser]       = useState(null)
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const [isEditing, setIsEditing] = useState(false)
-  const [editData, setEditData] = useState(null)
-  const [saving, setSaving] = useState(false)
+  const [editData, setEditData]   = useState(null)
+  const [saving, setSaving]       = useState(false)
+  const [saveError, setSaveError] = useState('')
 
   useEffect(() => {
     const fetchAll = async () => {
       try {
         setLoading(true)
-        const [me, metrics] = await Promise.all([
-          getMe(),
-          getUserMetrics()
-        ])
+        const [me, metrics] = await Promise.all([getMe(), getUserMetrics()])
         setUser(me)
         setProfile(metrics)
       } catch (err) {
@@ -112,68 +176,78 @@ export default function ProfilePage() {
     fetchAll()
   }, [])
 
-  const handleEditClick = () => {
+  function handleEditClick() {
     setEditData({
-      age: profile?.age ?? '',
-      weight: profile?.weight ?? '',
-      height: profile?.height ?? '',
-      primary_goal: profile?.primary_goal || 'Maintain',
-      fitness_level: profile?.fitness_level || 'Beginner',
-      activity_level: profile?.activity_level || 'Sedentary',
+      gender:               profile?.gender               || '',
+      age:                  profile?.age                  ? String(profile.age)    : '',
+      weight:               profile?.weight               ? String(profile.weight) : '',
+      height:               profile?.height               ? String(profile.height) : '',
+      primary_goal:         profile?.primary_goal         || 'general',
+      fitness_level:        profile?.fitness_level        || 'Beginner',
+      activity_level:       profile?.activity_level       || 'Sedentary',
+      daily_calorie_target: profile?.daily_calorie_target ? String(profile.daily_calorie_target) : '',
+      autoCalorie:          !profile?.daily_calorie_target,
+      medical_diet_notes:   profile?.medical_diet_notes   || '',
+      recovery_stage:       profile?.recovery_stage       || '',
+      injury_details:       profile?.injury_details       || '',
     })
+    setSaveError('')
     setIsEditing(true)
   }
 
-  const handleSave = async () => {
+  function set(field, value) {
+    setEditData((prev) => ({ ...prev, [field]: value }))
+  }
+
+  async function handleSave() {
     try {
       setSaving(true)
-      // Ensure numeric types are actually numbers for the backend schema
+      setSaveError('')
       const payload = {
-        ...editData,
-        age: parseInt(editData.age) || 0,
-        weight: parseFloat(editData.weight) || 0.0,
-        height: parseFloat(editData.height) || 0.0,
-        gender: profile?.gender || null, // Preserve gender or set to null
+        gender:               editData.gender               || undefined,
+        age:                  parseInt(editData.age)        || 0,
+        weight:               parseFloat(editData.weight)   || 0,
+        height:               parseFloat(editData.height)   || 0,
+        primary_goal:         editData.primary_goal         || 'general',
+        fitness_level:        editData.fitness_level        || 'Beginner',
+        activity_level:       editData.activity_level       || 'Sedentary',
+        daily_calorie_target: editData.daily_calorie_target ? Number(editData.daily_calorie_target) : undefined,
+        medical_diet_notes:   editData.medical_diet_notes   || undefined,
+        recovery_stage:       editData.recovery_stage       || undefined,
+        injury_details:       editData.injury_details       || undefined,
       }
-      
-      console.log('Saving profile payload:', payload)
-      const updatedProfile = await saveUserMetrics(payload)
-      setProfile(updatedProfile)
+      const updated = await saveUserMetrics(payload)
+      setProfile(updated)
       setIsEditing(false)
     } catch (err) {
-      console.error('Failed to save profile error detail:', err)
-      alert(err.message || 'Failed to save profile')
+      console.error('Failed to save profile:', err)
+      setSaveError(err.message || 'Failed to save profile. Please try again.')
     } finally {
       setSaving(false)
     }
-  }
-
-  const handleChange = (e) => {
-    const { name, value } = e.target
-    setEditData(prev => ({ ...prev, [name]: value }))
   }
 
   const bmi = profile?.weight && profile?.height
     ? (parseFloat(profile.weight) / Math.pow(parseFloat(profile.height) / 100, 2)).toFixed(1)
     : '—'
 
-  let bmiDetail = ''
-  if (bmi !== '—') {
-    if (bmi < 18.5) bmiDetail = 'Underweight'
-    else if (bmi < 25) bmiDetail = 'Normal weight'
-    else if (bmi < 30) bmiDetail = 'Overweight'
-    else bmiDetail = 'Obese'
-  }
+  const bmiDetail =
+    bmi === '—' ? '' :
+    bmi < 18.5  ? 'Underweight' :
+    bmi < 25    ? 'Normal weight' :
+    bmi < 30    ? 'Overweight'   :
+                  'Obese'
+
+  const goalLabel = PRIMARY_GOAL_OPTIONS.find(o => o.value === profile?.primary_goal)?.label || '—'
 
   return (
     <div className="flex flex-col min-h-screen bg-neutral-100">
-      
+
       {/* ── Header ──────────────────────────────────────────────────────────── */}
       <div className="bg-surface-primary border-b border-border-primary pt-12 pb-8 px-8 md:px-12 relative overflow-hidden">
-        {/* Abstract background blobs */}
         <div className="absolute top-[-50px] right-[-50px] w-64 h-64 bg-surface-action-hover2 rounded-full opacity-50 blur-3xl" />
         <div className="absolute bottom-[-50px] left-[20%] w-48 h-48 bg-warning-100 rounded-full opacity-50 blur-3xl" />
-        
+
         <div className="relative z-10 flex flex-col md:flex-row items-center md:items-start gap-6">
           <div className="w-24 h-24 md:w-32 md:h-32 rounded-full bg-gradient-to-br from-surface-action to-surface-action-hover border-4 border-neutral-white shadow-lg flex items-center justify-center shrink-0">
             <span className="text-heading-h3 md:text-heading-h2 font-bold text-neutral-white uppercase">
@@ -183,7 +257,6 @@ export default function ProfilePage() {
           <div className="flex flex-col items-center md:items-start text-center md:text-left pt-2">
             <h1 className="text-heading-h3 font-bold text-text-headings">{user?.name || 'Loading...'}</h1>
             <p className="text-body-md text-text-disabled mt-1">{user?.email || '—'}</p>
-            
             <div className="flex items-center gap-2 mt-4">
               <span className="px-3 py-1 bg-surface-action-hover2 text-text-action text-body-sm font-semibold rounded-round">
                 Member
@@ -196,7 +269,7 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          <button 
+          <button
             onClick={handleEditClick}
             className="md:ml-auto mt-4 md:mt-0 flex items-center gap-2 px-4 py-2 bg-surface-primary border border-border-primary text-text-headings text-body-sm font-semibold rounded-lg hover:bg-neutral-100 transition-colors shadow-sm"
           >
@@ -207,85 +280,64 @@ export default function ProfilePage() {
       </div>
 
       {/* ── Content ─────────────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-auto px-8 py-8 md:px-12 flex flex-col gap-10 animate-fade-in">
-        
+      <div className="flex-1 overflow-auto px-8 py-8 md:px-12 flex flex-col gap-10">
+
         {loading ? (
           <div className="flex justify-center items-center h-32">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-surface-action"></div>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-surface-action" />
           </div>
         ) : (
           <>
-            {/* ── Statistics Section ────────────────────────────────────────────── */}
+            {/* Statistics */}
             <section aria-label="Statistics">
               <h2 className="text-heading-h5 font-bold text-text-headings mb-5">Your Statistics</h2>
-              
-
-              {/* Summary Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-5">
-                <StatCard 
-                  title="Total Workouts" 
-                  value="—" 
-                  subtitle="Completed overall" 
-                  icon={<IconDumbbell />} 
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <StatCard
+                  title="Total Workouts"
+                  value="—"
+                  subtitle="Completed overall"
+                  icon={<IconDumbbell />}
                   colorClass="bg-information-100 text-information-500"
                   bgClass="bg-surface-primary"
                 />
-                <StatCard 
-                  title="Daily Calorie Goal" 
-                  value={profile?.daily_calorie_target?.toLocaleString() || '—'} 
-                  subtitle="Target daily intake" 
-                  icon={<IconApple />} 
+                <StatCard
+                  title="Daily Calorie Goal"
+                  value={profile?.daily_calorie_target?.toLocaleString() || '—'}
+                  subtitle="Target daily intake"
+                  icon={<IconApple />}
                   colorClass="bg-success-100 text-success-600"
                   bgClass="bg-surface-primary"
                 />
               </div>
             </section>
 
-            {/* ── Personal Data Section ─────────────────────────────────────────── */}
+            {/* Personal Data */}
             <section aria-label="Personal Data">
-              <div className="flex items-center justify-between mb-5">
-                <h2 className="text-heading-h5 font-bold text-text-headings">Personal Data</h2>
-              </div>
+              <h2 className="text-heading-h5 font-bold text-text-headings mb-5">Personal Data</h2>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-5">
-                <DataCard 
-                  label="Age" 
-                  value={profile?.age || '—'} 
-                  unit="yrs"
+                <DataCard label="Age"    value={profile?.age    || '—'} unit="yrs" />
+                <DataCard label="Weight" value={profile?.weight || '—'} unit="kg"
+                  detail={goalLabel !== '—' ? `Goal: ${goalLabel}` : undefined}
                 />
-                <DataCard 
-                  label="Weight" 
-                  value={profile?.weight || '—'} 
-                  unit="kg" 
-                  detail={profile?.primary_goal === 'LoseWeight' ? 'Goal: Decrease' : profile?.primary_goal === 'GainMuscle' ? 'Goal: Increase' : 'Goal: Maintain'}
-                />
-                <DataCard 
-                  label="Height" 
-                  value={profile?.height || '—'} 
-                  unit="cm" 
-                />
-                <DataCard 
-                  label="BMI" 
-                  value={bmi} 
-                  detail={bmiDetail}
-                />
-                <DataCard 
-                  label="Daily Activity" 
-                  value={profile?.activity_level ? profile.activity_level.replace(/([A-Z])/g, ' $1').trim() : '—'} 
+                <DataCard label="Height" value={profile?.height || '—'} unit="cm" />
+                <DataCard label="BMI"    value={bmi} detail={bmiDetail} />
+                <DataCard
+                  label="Activity"
+                  value={profile?.activity_level || '—'}
                   detail="Activity Level"
                 />
               </div>
             </section>
 
-            {/* ── Premium Status ──────────────────────────────────────────────── */}
+            {/* Premium placeholder */}
             <section aria-label="Membership Status" className="grid grid-cols-1 gap-6">
               <div className="bg-gradient-to-br from-surface-disabled to-neutral-200 rounded-xl p-8 shadow-sm flex flex-col items-center justify-center text-center relative overflow-hidden opacity-80 cursor-not-allowed">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-neutral-white opacity-20 rounded-full translate-x-1/2 -translate-y-1/2" />
                 <div className="absolute bottom-0 left-0 w-40 h-40 bg-neutral-black opacity-5 rounded-full -translate-x-1/2 translate-y-1/2" />
-                
                 <div className="relative z-10 grayscale">
                   <h3 className="text-heading-h5 font-bold text-text-disabled mb-3">Premium Member</h3>
                   <p className="text-body-md text-text-disabled mb-6 max-w-sm mx-auto">
-                    You have access to all premium personalized diet and workout plans.
+                    You have access to all premium personalised diet and workout plans.
                   </p>
                   <button disabled className="px-6 py-2.5 bg-neutral-100 text-text-disabled font-bold rounded-lg shadow-sm cursor-not-allowed">
                     Coming Soon
@@ -300,111 +352,201 @@ export default function ProfilePage() {
       {/* ── Edit Modal ──────────────────────────────────────────────────────── */}
       {isEditing && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-black/50 backdrop-blur-sm">
-          <div className="bg-surface-primary rounded-xl shadow-lg max-w-md w-full overflow-hidden flex flex-col">
+          <div className="bg-surface-primary rounded-xl shadow-xl max-w-md w-full flex flex-col overflow-hidden">
+
+            {/* Modal header */}
             <div className="px-6 py-4 border-b border-border-primary flex justify-between items-center">
-              <h2 className="text-heading-h6 font-bold text-text-headings">Edit Profile</h2>
-              <button 
+              <h2 className="text-heading-h6 font-bold text-text-headings">Edit Health Profile</h2>
+              <button
                 onClick={() => setIsEditing(false)}
-                className="text-text-disabled hover:text-text-headings transition-colors"
+                className="text-text-disabled hover:text-text-headings transition-colors text-lg leading-none"
                 aria-label="Close modal"
               >
                 ✕
               </button>
             </div>
-            
-            <div className="p-6 flex flex-col gap-4 overflow-y-auto max-h-[70vh]">
+
+            {/* Scrollable fields */}
+            <div className="p-6 flex flex-col gap-4 overflow-y-auto max-h-[65vh]">
+
+              {/* Personal */}
+              <ModalSection title="Personal Info" />
+              <DefinedField
+                id="edit-gender"
+                label="Biological Sex"
+                placeholder="Select sex"
+                options={GENDER_OPTIONS}
+                value={editData.gender}
+                onChange={(v) => set('gender', v)}
+              />
               <div className="flex flex-col gap-1">
-                <label className="text-body-sm font-semibold text-text-body">Age (yrs)</label>
-                <input 
-                  type="number" 
-                  name="age" 
-                  value={editData.age} 
-                  onChange={handleChange}
-                  className="px-3 py-2 border border-border-primary rounded-lg focus:outline-none focus:border-surface-action"
-                />
+                <label htmlFor="edit-age" className="block text-body-sm font-semibold text-text-body">Age</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    id="edit-age"
+                    type="number"
+                    min={5}
+                    max={100}
+                    placeholder="e.g. 25"
+                    value={editData.age}
+                    onChange={(e) => set('age', e.target.value)}
+                    className="w-full px-4 py-2 rounded-md border border-border-primary bg-surface-primary text-text-body text-body-md focus:outline-none focus:border-border-focus transition-colors"
+                  />
+                  <span className="text-body-md text-text-disabled shrink-0">yrs</span>
+                </div>
               </div>
+
+              {/* Body */}
+              <ModalSection title="Body Metrics" />
               <div className="grid grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1">
-                  <label className="text-body-sm font-semibold text-text-body">Weight (kg)</label>
-                  <input 
-                    type="number" 
-                    step="0.1"
-                    name="weight" 
-                    value={editData.weight} 
-                    onChange={handleChange}
-                    className="px-3 py-2 border border-border-primary rounded-lg focus:outline-none focus:border-surface-action"
-                  />
+                  <label htmlFor="edit-weight" className="block text-body-sm font-semibold text-text-body">Weight</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      id="edit-weight"
+                      type="number"
+                      min={20}
+                      max={300}
+                      step={0.5}
+                      placeholder="e.g. 70"
+                      value={editData.weight}
+                      onChange={(e) => set('weight', e.target.value)}
+                      className="w-full px-4 py-2 rounded-md border border-border-primary bg-surface-primary text-text-body text-body-md focus:outline-none focus:border-border-focus transition-colors"
+                    />
+                    <span className="text-body-md text-text-disabled shrink-0">kg</span>
+                  </div>
                 </div>
                 <div className="flex flex-col gap-1">
-                  <label className="text-body-sm font-semibold text-text-body">Height (cm)</label>
-                  <input 
-                    type="number" 
-                    name="height" 
-                    value={editData.height} 
-                    onChange={handleChange}
-                    className="px-3 py-2 border border-border-primary rounded-lg focus:outline-none focus:border-surface-action"
-                  />
+                  <label htmlFor="edit-height" className="block text-body-sm font-semibold text-text-body">Height</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      id="edit-height"
+                      type="number"
+                      min={50}
+                      max={280}
+                      placeholder="e.g. 175"
+                      value={editData.height}
+                      onChange={(e) => set('height', e.target.value)}
+                      className="w-full px-4 py-2 rounded-md border border-border-primary bg-surface-primary text-text-body text-body-md focus:outline-none focus:border-border-focus transition-colors"
+                    />
+                    <span className="text-body-md text-text-disabled shrink-0">cm</span>
+                  </div>
                 </div>
               </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-body-sm font-semibold text-text-body">Primary Goal</label>
-                <select 
-                  name="primary_goal" 
-                  value={editData.primary_goal} 
-                  onChange={handleChange}
-                  className="px-3 py-2 border border-border-primary rounded-lg focus:outline-none focus:border-surface-action"
-                >
-                  <option value="LoseWeight">Lose Weight</option>
-                  <option value="Maintain">Maintain</option>
-                  <option value="GainMuscle">Gain Muscle</option>
-                </select>
+
+              {/* Goals */}
+              <ModalSection title="Fitness Goals" />
+              <DefinedField
+                id="edit-primary-goal"
+                label="Primary Goal"
+                placeholder="Select goal"
+                options={PRIMARY_GOAL_OPTIONS}
+                value={editData.primary_goal}
+                onChange={(v) => set('primary_goal', v)}
+              />
+              <DefinedField
+                id="edit-fitness-level"
+                label="Fitness Level"
+                placeholder="Select level"
+                options={FITNESS_LEVEL_OPTIONS}
+                value={editData.fitness_level}
+                onChange={(v) => set('fitness_level', v)}
+              />
+              <DefinedField
+                id="edit-activity-level"
+                label="Daily Activity Level"
+                placeholder="Select activity level"
+                options={ACTIVITY_LEVEL_OPTIONS}
+                value={editData.activity_level}
+                onChange={(v) => set('activity_level', v)}
+              />
+
+              <ModalSection title="Nutrition" />
+              <div className="flex flex-col gap-2">
+                <label className="block text-body-sm font-semibold text-text-body">Daily Calorie Target</label>
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={editData.autoCalorie}
+                    onChange={(e) => set('autoCalorie', e.target.checked)}
+                    className="w-4 h-4 rounded accent-surface-action cursor-pointer"
+                  />
+                  <span className="text-body-sm text-text-body">Calculate it for me automatically</span>
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    id="edit-calorie-target"
+                    type="number"
+                    min={1500}
+                    max={10000}
+                    step={50}
+                    placeholder="e.g. 2000"
+                    disabled={editData.autoCalorie}
+                    value={editData.autoCalorie ? '' : editData.daily_calorie_target}
+                    onChange={(e) => set('daily_calorie_target', e.target.value)}
+                    className={`w-full px-4 py-2 rounded-md border text-body-md transition-colors ${
+                      editData.autoCalorie
+                        ? 'border-border-disabled bg-surface-disabled text-text-disabled cursor-not-allowed'
+                        : 'border-border-primary bg-surface-primary text-text-body focus:outline-none focus:border-border-focus'
+                    }`}
+                  />
+                  <span className="text-body-md text-text-disabled shrink-0">kcal</span>
+                </div>
+                {!editData.autoCalorie && (
+                  <p className="text-body-xs text-text-disabled">Minimum 1500 kcal / day</p>
+                )}
               </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-body-sm font-semibold text-text-body">Fitness Level</label>
-                <select 
-                  name="fitness_level" 
-                  value={editData.fitness_level} 
-                  onChange={handleChange}
-                  className="px-3 py-2 border border-border-primary rounded-lg focus:outline-none focus:border-surface-action"
-                >
-                  <option value="Beginner">Beginner</option>
-                  <option value="Intermediate">Intermediate</option>
-                  <option value="Advanced">Advanced</option>
-                </select>
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-body-sm font-semibold text-text-body">Activity Level</label>
-                <select 
-                  name="activity_level" 
-                  value={editData.activity_level} 
-                  onChange={handleChange}
-                  className="px-3 py-2 border border-border-primary rounded-lg focus:outline-none focus:border-surface-action"
-                >
-                  <option value="Sedentary">Sedentary</option>
-                  <option value="LightlyActive">Lightly Active</option>
-                  <option value="ModeratelyActive">Moderately Active</option>
-                  <option value="VeryActive">Very Active</option>
-                  <option value="ExtraActive">Extra Active</option>
-                </select>
-              </div>
+              <DefinedField
+                id="edit-diet-notes"
+                label="Dietary Restrictions"
+                placeholder="No dietary restrictions"
+                options={DIET_NOTES_OPTIONS}
+                value={editData.medical_diet_notes}
+                onChange={(v) => set('medical_diet_notes', v)}
+              />
+
+              {/* Rehab */}
+              <ModalSection title="Rehab & Medical" />
+              <DefinedField
+                id="edit-recovery-stage"
+                label="Recovery Stage"
+                placeholder="Not applicable"
+                options={RECOVERY_STAGE_OPTIONS}
+                value={editData.recovery_stage}
+                onChange={(v) => set('recovery_stage', v)}
+              />
+              <DefinedField
+                id="edit-injury-details"
+                label="Injury Details"
+                placeholder="No specific injury"
+                options={INJURY_DETAIL_OPTIONS}
+                value={editData.injury_details}
+                onChange={(v) => set('injury_details', v)}
+              />
             </div>
 
-            <div className="px-6 py-4 border-t border-border-primary flex justify-end gap-3 bg-neutral-100">
-              <button 
-                onClick={() => setIsEditing(false)}
-                className="px-4 py-2 rounded-lg text-body-sm font-semibold text-text-body border border-border-primary bg-surface-primary hover:bg-neutral-100 transition-colors"
-                disabled={saving}
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={handleSave}
-                className="px-4 py-2 rounded-lg text-body-sm font-semibold text-neutral-white bg-surface-action hover:bg-surface-action-hover transition-colors flex items-center gap-2"
-                disabled={saving}
-              >
-                {saving && <div className="w-4 h-4 rounded-full border-2 border-neutral-white border-t-transparent animate-spin" />}
-                Save Changes
-              </button>
+            {/* Modal footer */}
+            <div className="px-6 py-4 border-t border-border-primary flex flex-col gap-2 bg-neutral-100">
+              {saveError && (
+                <p className="text-body-sm text-text-error">{saveError}</p>
+              )}
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => setIsEditing(false)}
+                  disabled={saving}
+                  className="px-4 py-2 rounded-lg text-body-sm font-semibold text-text-body border border-border-primary bg-surface-primary hover:bg-neutral-100 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="px-4 py-2 rounded-lg text-body-sm font-semibold text-neutral-white bg-surface-action hover:bg-surface-action-hover transition-colors flex items-center gap-2"
+                >
+                  {saving && <div className="w-4 h-4 rounded-full border-2 border-neutral-white border-t-transparent animate-spin" />}
+                  Save Changes
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -412,4 +554,3 @@ export default function ProfilePage() {
     </div>
   )
 }
-
