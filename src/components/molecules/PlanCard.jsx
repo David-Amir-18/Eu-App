@@ -267,6 +267,29 @@ function ClosestPreview({ planId, planType, slots, routines, planImage, onToggle
   )
 }
 
+// ── Enrollment status badge ───────────────────────────────────────────────────
+const STATUS_STYLES = {
+  active:    'bg-success-100 text-success-700 border-success-200',
+  paused:    'bg-warning-100 text-warning-700 border-warning-200',
+  completed: 'bg-information-100 text-information-700 border-information-200',
+  dropped:   'bg-error-100 text-error-600 border-error-200',
+}
+const STATUS_ICONS = {
+  active:    '●',
+  paused:    '⏸',
+  completed: '✓',
+  dropped:   '✕',
+}
+function EnrollmentBadge({ status }) {
+  if (!status) return null
+  return (
+    <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${STATUS_STYLES[status] || ''}`}>
+      <span>{STATUS_ICONS[status]}</span>
+      {status.charAt(0).toUpperCase() + status.slice(1)}
+    </span>
+  )
+}
+
 // ── PlanCard ──────────────────────────────────────────────────────────────────
 export function PlanCard({
   id,
@@ -300,6 +323,14 @@ export function PlanCard({
   rawInjury,
   rawRehabDays,
   onDelete,
+  // ── Enrollment props ────────────────────────────────────────────────────────
+  enrollment,        // EnrollmentResponse object | undefined
+  enrolling = false, // boolean — loading state for this card
+  onEnroll,          // () => void
+  onPauseEnrollment,
+  onResumeEnrollment,
+  onDropEnrollment,
+  onCompleteEnrollment,
 }) {
   const navigate = useNavigate()
   const planType = defaultTab
@@ -309,10 +340,21 @@ export function PlanCard({
   const isDraft = status === 'draft'
   const isCustomPlan = id !== 'diabetes-friendly' && id !== 'full-body' && id !== 'acl-injury'
 
+  // Enrollment derived state
+  const enrollStatus = enrollment?.status  // 'active'|'paused'|'completed'|'dropped'|undefined
+  const isEnrolled   = !!enrollStatus
+  const canEnroll    = !isEnrolled || enrollStatus === 'dropped' || enrollStatus === 'completed'
+  const canPause     = enrollStatus === 'active'
+  const canResume    = enrollStatus === 'paused'
+  const canDrop      = enrollStatus === 'active' || enrollStatus === 'paused'
+  const isTerminal   = enrollStatus === 'completed' || enrollStatus === 'dropped'
+
   return (
     <div className={cn(
       "flex flex-col xl:flex-row border border-border-primary rounded-xl overflow-hidden bg-surface-primary hover:shadow-md transition-all duration-300",
-      isDraft && "bg-neutral-100/60 border-dashed"
+      isDraft && "bg-neutral-100/60 border-dashed",
+      enrollStatus === 'active' && "ring-1 ring-success-300",
+      enrollStatus === 'paused' && "ring-1 ring-warning-300",
     )}>
 
       {/* Left panel — fixed width, image background */}
@@ -331,6 +373,12 @@ export function PlanCard({
         <span className={cn('absolute top-2 right-2 text-body-sm font-bold px-2 py-0.5 rounded-round', cfg.badge)}>
           {planType}
         </span>
+        {/* Enrollment status badge top-left */}
+        {enrollStatus && (
+          <span className="absolute top-2 left-2">
+            <EnrollmentBadge status={enrollStatus} />
+          </span>
+        )}
         {/* Plan name bottom-left */}
         <span className="text-body-md font-bold text-neutral-white leading-tight">{name}</span>
       </div>
@@ -369,7 +417,7 @@ export function PlanCard({
         </div>
 
         {/* CTAs */}
-        <div className="flex gap-2 mt-1">
+        <div className="flex flex-wrap gap-2 mt-1">
           {isDraft ? (
             <Button
               variant={cfg.btnPrimary}
@@ -378,29 +426,11 @@ export function PlanCard({
                 navigate('/plans/create', {
                   state: {
                     draftPlan: {
-                      id,
-                      name,
-                      defaultTab,
-                      dateRange,
-                      detail,
-                      progress,
-                      progressMax,
-                      sessions,
-                      sessionsMax,
-                      ctaLabel,
-                      image,
-                      status,
-                      rawType,
-                      rawLevel,
-                      rawStartDate,
-                      rawEndDate,
-                      rawEquipment,
-                      rawWorkoutDays,
-                      rawDietPref,
-                      rawCalorieTarget,
-                      rawMealSlots,
-                      rawInjury,
-                      rawRehabDays,
+                      id, name, defaultTab, dateRange, detail, progress, progressMax,
+                      sessions, sessionsMax, ctaLabel, image, status,
+                      rawType, rawLevel, rawStartDate, rawEndDate, rawEquipment,
+                      rawWorkoutDays, rawDietPref, rawCalorieTarget, rawMealSlots,
+                      rawInjury, rawRehabDays,
                     }
                   }
                 })
@@ -410,9 +440,9 @@ export function PlanCard({
             </Button>
           ) : (
             <>
-              <Button 
-                variant={cfg.btnOutline} 
-                size="sm" 
+              <Button
+                variant={cfg.btnOutline}
+                size="sm"
                 onClick={() => {
                   const type = planType.toLowerCase()
                   const planId = backendId || id || name.replace(/\s+/g, '-').toLowerCase()
@@ -425,6 +455,61 @@ export function PlanCard({
                 <Button variant={cfg.btnPrimary} size="sm">
                   {ctaLabel}
                 </Button>
+              )}
+            </>
+          )}
+
+          {/* ── Enrollment actions ────────────────────────────────────────── */}
+          {!isDraft && (
+            <>
+              {canEnroll && (
+                <button
+                  id={`enroll-btn-${id}`}
+                  onClick={(e) => { e.stopPropagation(); onEnroll?.() }}
+                  disabled={enrolling}
+                  className={cn(
+                    'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-body-sm font-bold transition-all border shadow-sm',
+                    enrolling
+                      ? 'opacity-50 cursor-not-allowed border-border-primary text-text-disabled'
+                      : 'bg-success-600 border-success-700 text-neutral-white hover:bg-success-700'
+                  )}
+                  title={isTerminal ? 'Re-enroll in this plan' : 'Enroll in this plan'}
+                >
+                  {enrolling ? '…' : isTerminal ? '↩ Re-enroll' : '+ Enroll'}
+                </button>
+              )}
+              {canPause && (
+                <button
+                  id={`pause-enroll-btn-${id}`}
+                  onClick={(e) => { e.stopPropagation(); onPauseEnrollment?.() }}
+                  disabled={enrolling}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-body-sm font-bold border border-warning-300 text-warning-700 bg-warning-50 hover:bg-warning-100 transition-colors disabled:opacity-50"
+                  title="Pause enrollment"
+                >
+                  {enrolling ? '…' : '⏸ Pause'}
+                </button>
+              )}
+              {canResume && (
+                <button
+                  id={`resume-enroll-btn-${id}`}
+                  onClick={(e) => { e.stopPropagation(); onResumeEnrollment?.() }}
+                  disabled={enrolling}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-body-sm font-bold border border-success-300 text-success-700 bg-success-50 hover:bg-success-100 transition-colors disabled:opacity-50"
+                  title="Resume enrollment"
+                >
+                  {enrolling ? '…' : '▶ Resume'}
+                </button>
+              )}
+              {canDrop && (
+                <button
+                  id={`drop-enroll-btn-${id}`}
+                  onClick={(e) => { e.stopPropagation(); onDropEnrollment?.() }}
+                  disabled={enrolling}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-body-sm font-bold border border-error-200 text-error-500 bg-error-50 hover:bg-error-100 transition-colors disabled:opacity-50"
+                  title="Drop this enrollment"
+                >
+                  {enrolling ? '…' : '✕ Drop'}
+                </button>
               )}
             </>
           )}

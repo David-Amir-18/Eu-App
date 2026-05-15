@@ -96,6 +96,21 @@ export async function refreshToken() {
 }
 
 /**
+ * Logout — invalidates the session on the backend (best-effort)
+ */
+export async function logoutUser() {
+  if (MOCK) return
+  try {
+    await fetch(`${API_URL}/auth/logout`, {
+      method: 'POST',
+      headers: authHeaders(),
+    })
+  } catch {
+    // Swallow network errors — local session will still be cleared
+  }
+}
+
+/**
  * Get current user from token
  */
 export async function getMe() {

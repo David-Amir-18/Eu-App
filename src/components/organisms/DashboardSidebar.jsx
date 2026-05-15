@@ -158,12 +158,12 @@ function StatRow({ label, value, max }) {
 import { getDailyLog } from '../../api/dailyLogsService.js'
 
 export function DashboardSidebar() {
-  const { isAdmin } = useAuth()
+  const { isAdmin, user, logout } = useAuth()
   const [isOpen, setIsOpen] = useState(false)
   const [profile, setProfile] = useState(null)
   const [dailyLog, setDailyLog] = useState(null)
-  const userId = localStorage.getItem('user_id')
-  const username = localStorage.getItem('username') || 'User'
+  const userId = user?.id
+  const username = user?.name || user?.email?.split('@')[0] || 'User'
 
   const baseNavItems = [
     { to: '/dashboard', label: 'Dashboard', icon: <IconDashboard />, end: true },
@@ -182,7 +182,8 @@ export function DashboardSidebar() {
   useEffect(() => {
     if (!userId) return
     
-    const todayStr = new Date().toISOString().split('T')[0]
+    const now = new Date()
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
     
     const fetchData = async () => {
       try {
@@ -288,10 +289,7 @@ export function DashboardSidebar() {
       <div className="px-3 py-4 border-t border-border-primary">
         <button
           onClick={() => {
-            localStorage.removeItem('token')
-            localStorage.removeItem('refresh_token')
-            localStorage.removeItem('user_id')
-            localStorage.removeItem('username')
+            logout()
             window.location.href = '/login'
           }}
           className="flex items-center gap-3 px-3 py-2 rounded-lg text-body-md font-semibold text-error-500 hover:bg-surface-error transition-colors w-full"

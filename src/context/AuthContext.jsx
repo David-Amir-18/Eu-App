@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
-import { login as apiLogin, register as apiRegister, refreshToken, getMe } from '../api/authService.js'
+import { login as apiLogin, register as apiRegister, refreshToken, getMe, logoutUser } from '../api/authService.js'
 
 // ── Context ────────────────────────────────────────────────────────────────────
 const AuthContext = createContext(null)
@@ -15,8 +15,9 @@ export function AuthProvider({ children }) {
   const [user, setUser]       = useState(null)   // { id, email, name }
   const [isAdmin, setIsAdmin] = useState(false)
   const [loading, setLoading] = useState(true)   // true while we verify the token on mount
-  const isRefreshing = useRef(false)
-  const pendingQueue = useRef([])                 // requests waiting for the refresh to finish
+  const isRefreshing  = useRef(false)
+  const pendingQueue  = useRef([])                // requests waiting for the refresh to finish
+  const bootstrapped  = useRef(false)             // prevent StrictMode double-fire
 
   // ── Token helpers ────────────────────────────────────────────────────────────
   function saveTokens({ access_token, refresh_token }) {
@@ -106,19 +107,26 @@ export function AuthProvider({ children }) {
 
   // ── Bootstrap on mount: verify stored token ──────────────────────────────────
   useEffect(() => {
+    // Guard against React StrictMode double-invocation firing two /auth/users probes
+    if (bootstrapped.current) return
+    bootstrapped.current = true
+
+    async function checkAccess(t) {
+      // Silently probe the admin endpoint — 403 is the expected response for regular users
+      try {
+        const probe = await fetch(`${import.meta.env.VITE_API_URL}/auth/users`, {
+          headers: { Authorization: `Bearer ${t}` },
+        })
+        // 200 = admin, 403 = regular user (expected — not an error)
+        setIsAdmin(probe.status === 200)
+      } catch {
+        setIsAdmin(false)
+      }
+    }
+
     async function bootstrap() {
       const token = getAccessToken()
       if (!token) { setLoading(false); return }
-
-      async function checkAccess(t) {
-        try {
-          // Probe the admin-only endpoint — 403 = regular user (expected), true = admin
-          const probe = await fetch(`${import.meta.env.VITE_API_URL}/auth/users`, { headers: { Authorization: `Bearer ${t}` } })
-          setIsAdmin(probe.ok)
-        } catch {
-          setIsAdmin(false)
-        }
-      }
 
       try {
         const me = await getMe()
@@ -149,9 +157,12 @@ export function AuthProvider({ children }) {
     const data = await apiLogin(identifier, password)
     saveTokens(data)
     setUser(data.user)
+    // Silently check admin — 403 is normal for regular users, not an error
     try {
-      const probe = await fetch(`${import.meta.env.VITE_API_URL}/auth/users`, { headers: { Authorization: `Bearer ${data.access_token}` } })
-      setIsAdmin(probe.ok)
+      const probe = await fetch(`${import.meta.env.VITE_API_URL}/auth/users`, {
+        headers: { Authorization: `Bearer ${data.access_token}` },
+      })
+      setIsAdmin(probe.status === 200)
     } catch {
       setIsAdmin(false)
     }
@@ -166,7 +177,8 @@ export function AuthProvider({ children }) {
     return data
   }
 
-  function logout() {
+  async function logout() {
+    await logoutUser()   // best-effort — invalidates Supabase session on the backend
     clearTokens()
     setUser(null)
     setIsAdmin(false)

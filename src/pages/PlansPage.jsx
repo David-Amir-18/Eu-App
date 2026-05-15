@@ -6,6 +6,12 @@ import { cn } from '../components/utils.js'
 import { getWorkoutPlans, deleteWorkoutPlan } from '../api/workoutsService.js'
 import { getMealPlans, getMealPlan, deleteMealPlan } from '../api/mealPlansService.js'
 import { getMyRehabPlans, deleteRehabPlan } from '../api/rehabService.js'
+import {
+  listEnrollments,
+  createEnrollment,
+  updateEnrollmentStatus,
+  deleteEnrollment,
+} from '../api/enrollmentService.js'
 
 const TABS = ['All', 'Workout', 'Diet', 'Rehab']
 
@@ -128,19 +134,24 @@ export default function PlansPage() {
   const [error, setError] = useState(null)
   const [planToDelete, setPlanToDelete] = useState(null)  // { id, planType }
   const [deleting, setDeleting] = useState(false)
-  // Local "taken" state for meal slots — { [slotId]: boolean }
-  // Resets on page refresh (no persistence needed for a quick day-level toggle)
   const [slotTakenMap, setSlotTakenMap] = useState({})
 
-  // ── Fetch all plan types from backend ─────────────────────────────────────
+  // ── Enrollment state ──────────────────────────────────────────────────────
+  // Map of planId → enrollment object (active only)
+  const [enrollmentMap, setEnrollmentMap] = useState({})
+  const [enrolling, setEnrolling] = useState(null)      // planId currently being acted on
+  const [enrollError, setEnrollError] = useState(null)  // inline error message
+
+  // ── Fetch all plan types + enrollments ───────────────────────────────────
   const loadPlans = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const [workoutRes, mealRes, rehabRes] = await Promise.allSettled([
+      const [workoutRes, mealRes, rehabRes, enrollRes] = await Promise.allSettled([
         getWorkoutPlans(),
         getMealPlans(),
         getMyRehabPlans(),
+        listEnrollments(),          // all statuses — we filter below
       ])
 
       const workoutPlans = workoutRes.status === 'fulfilled'
@@ -168,6 +179,17 @@ export default function PlansPage() {
       }
 
       setPlans([...workoutPlans, ...mealPlans, ...rehabPlans])
+
+      // Build planId → enrollment lookup (all enrollments, any status)
+      if (enrollRes.status === 'fulfilled') {
+        const map = {}
+        for (const e of (enrollRes.value ?? [])) {
+          if (e.workout_plan_id) map[e.workout_plan_id] = e
+          if (e.meal_plan_id)    map[e.meal_plan_id]    = e
+          if (e.rehab_plan_id)   map[e.rehab_plan_id]   = e
+        }
+        setEnrollmentMap(map)
+      }
     } catch (err) {
       setError(err.message || 'Failed to load plans.')
     } finally {
@@ -196,6 +218,58 @@ export default function PlansPage() {
       return next
     })
   }, [])
+
+  // ── Enroll in a plan ──────────────────────────────────────────────────────
+  const handleEnroll = useCallback(async (plan) => {
+    setEnrolling(plan.id)
+    setEnrollError(null)
+    try {
+      const payload =
+        plan.planType === 'Workout' ? { workoutPlanId: plan.id } :
+        plan.planType === 'Diet'    ? { mealPlanId:    plan.id } :
+                                      { rehabPlanId:   plan.id }
+      const enrollment = await createEnrollment(payload)
+      setEnrollmentMap(prev => ({ ...prev, [plan.id]: enrollment }))
+    } catch (err) {
+      setEnrollError(err.message || 'Failed to enroll.')
+    } finally {
+      setEnrolling(null)
+    }
+  }, [])
+
+  // ── Change enrollment status (pause / resume / drop / complete) ───────────
+  const handleEnrollmentStatus = useCallback(async (plan, newStatus) => {
+    const enrollment = enrollmentMap[plan.id]
+    if (!enrollment) return
+    setEnrolling(plan.id)
+    setEnrollError(null)
+    try {
+      const updated = await updateEnrollmentStatus(enrollment.id, newStatus)
+      setEnrollmentMap(prev => ({ ...prev, [plan.id]: updated }))
+    } catch (err) {
+      setEnrollError(err.message || 'Failed to update enrollment.')
+    } finally {
+      setEnrolling(null)
+    }
+  }, [enrollmentMap])
+
+  // ── Drop (hard-delete) an enrollment ─────────────────────────────────────
+  const handleDropEnrollment = useCallback(async (plan) => {
+    const enrollment = enrollmentMap[plan.id]
+    if (!enrollment) return
+    // Mark as dropped first (backend invariant), then optionally delete
+    // The cleanest UX: just PATCH to 'dropped' — terminal but keeps the record
+    setEnrolling(plan.id)
+    setEnrollError(null)
+    try {
+      const updated = await updateEnrollmentStatus(enrollment.id, 'dropped')
+      setEnrollmentMap(prev => ({ ...prev, [plan.id]: updated }))
+    } catch (err) {
+      setEnrollError(err.message || 'Failed to drop enrollment.')
+    } finally {
+      setEnrolling(null)
+    }
+  }, [enrollmentMap])
 
   // ── Delete ─────────────────────────────────────────────────────────────────
   const handleDeletePlan = useCallback((id) => {
@@ -304,18 +378,39 @@ export default function PlansPage() {
         )}
 
         <section aria-label="Plans List" className="flex flex-col gap-6">
+          {/* Enrollment error banner */}
+          {enrollError && (
+            <div className="flex items-center gap-3 px-4 py-3 bg-warning-50 border border-warning-200 rounded-xl text-warning-700 text-body-sm font-medium">
+              <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+              {enrollError}
+              <button onClick={() => setEnrollError(null)} className="ml-auto underline hover:no-underline text-body-sm">Dismiss</button>
+            </div>
+          )}
+
           <div className="flex flex-col gap-5">
             {loading ? (
               <Spinner />
             ) : filteredPlans.length > 0 ? (
-              filteredPlans.map(plan => (
-                <PlanCard
-                  key={plan.id}
-                  {...plan}
-                  onDelete={handleDeletePlan}
-                  onToggleSlotTaken={handleToggleSlotTaken}
-                />
-              ))
+              filteredPlans.map(plan => {
+                const enrollment = enrollmentMap[plan.id]
+                return (
+                  <PlanCard
+                    key={plan.id}
+                    {...plan}
+                    onDelete={handleDeletePlan}
+                    onToggleSlotTaken={handleToggleSlotTaken}
+                    enrollment={enrollment}
+                    enrolling={enrolling === plan.id}
+                    onEnroll={() => handleEnroll(plan)}
+                    onPauseEnrollment={() => handleEnrollmentStatus(plan, 'paused')}
+                    onResumeEnrollment={() => handleEnrollmentStatus(plan, 'active')}
+                    onDropEnrollment={() => handleDropEnrollment(plan)}
+                    onCompleteEnrollment={() => handleEnrollmentStatus(plan, 'completed')}
+                  />
+                )
+              })
             ) : (
               <div className="py-12 flex flex-col items-center justify-center text-center border border-border-primary border-dashed rounded-xl bg-surface-primary opacity-70">
                 <p className="text-body-lg font-semibold text-text-disabled mb-2">

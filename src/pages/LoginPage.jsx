@@ -2,9 +2,10 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Field } from '../components/atoms/Field'
 import { Button } from '../components/atoms/Button'
-import { login } from '../api/authService'
+import { useAuth } from '../context/AuthContext'
 
 export default function LoginPage() {
+  const { login } = useAuth()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -17,12 +18,8 @@ export default function LoginPage() {
     setError('')
     setLoading(true)
     try {
-      const data = await login(username, password)
-      localStorage.setItem('token', data.access_token)
-      if (data.refresh_token) localStorage.setItem('refresh_token', data.refresh_token)
-      localStorage.setItem('user_id', data.user?.id || '')
-      localStorage.setItem('username', data.user?.name || username)
-      window.location.href = '/dashboard'
+      await login(username, password)         // AuthContext.login saves tokens
+      navigate('/dashboard')
     } catch (err) {
       setError(err.message || 'Something went wrong. Please try again.')
     } finally {

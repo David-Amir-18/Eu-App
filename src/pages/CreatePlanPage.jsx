@@ -55,10 +55,10 @@ const MUSCLE_GROUP_OPTIONS = [
 ]
 
 const DIET_PREF_OPTIONS = [
-  { value: 'weight_loss',   label: 'Weight Loss' },
-  { value: 'muscle_gain',  label: 'Muscle Gain' },
-  { value: 'maintenance',  label: 'Maintenance' },
-  { value: 'rehab',        label: 'Recovery / Rehab' },
+  { value: 'weight_loss',  label: 'Weight Loss' },
+  { value: 'muscle_gain', label: 'Muscle Gain' },
+  { value: 'general',     label: 'General Health / Maintenance' },  // 'maintenance' is not a valid DB value
+  { value: 'rehab',       label: 'Recovery / Rehab' },
 ]
 
 // ── Components ─────────────────────────────────────────────────────────────────
@@ -290,6 +290,7 @@ export default function CreatePlanPage() {
   const [showValidationModal, setShowValidationModal] = useState(false)
   const [validationMessage, setValidationMessage] = useState('Please give your plan a name before saving! We need it to help you identify it later.')
   const [pendingType, setPendingType] = useState(null)
+  const [saving, setSaving] = useState(false)
 
   // ── Derived Data ──
   const isDirty = name !== '' || startDate !== null || endDate !== null ||
@@ -546,6 +547,7 @@ export default function CreatePlanPage() {
         'All Levels': 'advanced',
       }
       try {
+        setSaving(true)
         // Step 1: Create the plan (metadata only)
         const createdPlan = await createWorkoutPlan({
           title: name.trim(),
@@ -585,6 +587,7 @@ export default function CreatePlanPage() {
         navigate(`/plans/workout/${createdPlan.id}`)
         return
       } catch (error) {
+        setSaving(false)
         setValidationMessage(error.message || 'Failed to save workout plan to server.')
         setShowValidationModal(true)
         return
@@ -593,6 +596,7 @@ export default function CreatePlanPage() {
 
     if (type === 'diet') {
       try {
+        setSaving(true)
         // Step 1: Create the meal plan
         const createdPlan = await createMealPlan({
           title: name.trim(),
@@ -610,6 +614,7 @@ export default function CreatePlanPage() {
         navigate('/plans')
         return
       } catch (error) {
+        setSaving(false)
         setValidationMessage(error.message || 'Failed to save meal plan to server.')
         setShowValidationModal(true)
         return
@@ -623,6 +628,7 @@ export default function CreatePlanPage() {
         return
       }
       try {
+        setSaving(true)
         const createdPlan = await createRehabPlan({
           title: name.trim(),
           description: `Rehab protocol for ${level}`,
@@ -655,6 +661,7 @@ export default function CreatePlanPage() {
         navigate(`/plans/rehab/${createdPlan.id}`)
         return
       } catch (error) {
+        setSaving(false)
         setValidationMessage(error.message || 'Failed to save rehab plan to server.')
         setShowValidationModal(true)
         return
@@ -665,19 +672,35 @@ export default function CreatePlanPage() {
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-surface-page animate-fade-in">
 
+      {/* ── Full-screen saving overlay ── */}
+      {saving && (
+        <div
+          className="fixed inset-0 z-[9999] flex flex-col items-center justify-center gap-5"
+          style={{ backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', backgroundColor: 'rgba(0,0,0,0.35)' }}
+          aria-live="polite"
+          aria-label="Saving plan, please wait"
+        >
+          <div className="w-16 h-16 rounded-full border-4 border-neutral-white/30 border-t-neutral-white animate-spin" />
+          <p className="text-neutral-white text-body-md font-semibold tracking-wide select-none">
+            Saving your plan…
+          </p>
+        </div>
+      )}
+
       {/* ── Header ── */}
       <div className="shrink-0 px-8 py-6 border-b border-border-primary flex items-center justify-between bg-surface-primary sticky top-0 z-20">
         <h1 className="text-heading-h5 font-bold text-text-headings">Create New Plan</h1>
         <div className="flex items-center gap-3">
-          <Button variant="outline" onClick={() => setShowCancelModal(true)} className="hidden sm:block">
+          <Button variant="outline" onClick={() => setShowCancelModal(true)} className="hidden sm:block" disabled={saving}>
             Cancel
           </Button>
-          <Button variant="outline" onClick={() => handleSave('draft')} className="hidden sm:block">
+          <Button variant="outline" onClick={() => handleSave('draft')} className="hidden sm:block" disabled={saving}>
             Save as Draft
           </Button>
           <Button
             variant={type === 'workout' ? 'workout-primary' : type === 'diet' ? 'meals-primary' : 'rehab-primary'}
             onClick={() => handleSave('planned')}
+            disabled={saving}
           >
             Save Plan
           </Button>
@@ -1271,8 +1294,14 @@ export default function CreatePlanPage() {
             Select which training days should run this routine. A day can only be assigned to one routine.
           </p>
           <div className="flex flex-wrap gap-2">
-            {workoutDays.map((day) => {
+            {activeDays.length === 0 && (
+              <p className="text-body-sm text-text-disabled italic">
+                No preferred days selected yet. Go back and pick your {type === 'rehab' ? 'therapy' : 'workout'} days first.
+              </p>
+            )}
+            {activeDays.map((day) => {
               const selected = routines.find(r => r.id === routineForDayAssign)?.assignedDays?.includes(day)
+              const activeBtn = type === 'rehab' ? 'bg-rehab-prim' : 'bg-workout-prim'
               return (
                 <button
                   key={day}
@@ -1281,7 +1310,7 @@ export default function CreatePlanPage() {
                   className={cn(
                     'px-4 py-2 rounded-lg text-body-sm font-semibold transition-colors border',
                     selected
-                      ? 'bg-workout-prim text-neutral-white border-transparent'
+                      ? `${activeBtn} text-neutral-white border-transparent`
                       : 'bg-surface-primary border-border-primary text-text-body hover:border-neutral-400'
                   )}
                 >

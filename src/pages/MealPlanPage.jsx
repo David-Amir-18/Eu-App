@@ -4,6 +4,8 @@ import { cn } from '../components/utils.js'
 import { Button } from '../components/atoms/Button.jsx'
 import { getMeal, getMeals, getFilterOptions } from '../api/mealsService.js'
 import { getMealPlan } from '../api/mealPlansService.js'
+import { getActiveMealEnrollment, createEnrollment, updateEnrollmentStatus } from '../api/enrollmentService.js'
+import { createMealSchedule, updateMealEatenStatus, getEatenMeals } from '../api/mealTrackingService.js'
 
 
 
@@ -566,29 +568,31 @@ export default function MealPlanPage() {
   const [pageLoading, setPageLoading] = useState(true)
   const [pageError, setPageError]     = useState(null)
 
-  // ── Load plan from backend ────────────────────────────────────────────────
+  // ── Load plan from backend + hydrate today's eaten state ────────────────────
   useEffect(() => {
     if (!id) return
-    setPageLoading(true)
-    setPageError(null)
-    getMealPlan(id)
-      .then(data => {
-        // Extract calorie target from description if present
+    let cancelled = false
+    async function load() {
+      setPageLoading(true)
+      setPageError(null)
+      try {
+        const data = await getMealPlan(id)
+        if (cancelled) return
+
         const kcalMatch = (data.description || '').match(/(\d+)\s*kcal/i)
-        const calorieTarget = kcalMatch ? parseInt(kcalMatch[1]) : 2000
+        setPlan({ ...data, calorieTarget: kcalMatch ? parseInt(kcalMatch[1]) : 2000 })
 
-        setPlan({ ...data, calorieTarget })
-
-        // Map backend slot_meals → MealSlotCard format
         const SLOT_TIMES = {
           breakfast: '08:00 AM', lunch: '01:00 PM',
           dinner: '07:00 PM', snack: '04:00 PM',
         }
         const mappedSlots = (data.slot_meals ?? []).map(s => ({
           id: s.id,
+          meal_type: s.meal_type,
           label: s.meal_type.charAt(0).toUpperCase() + s.meal_type.slice(1),
           time: SLOT_TIMES[s.meal_type] ?? '12:00 PM',
           taken: false,
+          scheduleId: null,
           meals: s.meal ? [{
             id: s.meal_id,
             name: s.meal.title,
@@ -601,14 +605,64 @@ export default function MealPlanPage() {
           }] : [],
           selectedMealId: s.meal_id ?? null,
         }))
-        setSlots(mappedSlots)
-      })
-      .catch(err => setPageError(err.message || 'Failed to load meal plan.'))
-      .finally(() => setPageLoading(false))
+
+        // Hydrate today's eaten state so checkboxes show the correct state on load
+        let eatenToday = []
+        try {
+          const todayStr = new Date().toISOString().split('T')[0]
+          const { results } = await getEatenMeals({ date: todayStr })
+          eatenToday = results || []
+        } catch (_) {}
+
+        const merged = mappedSlots.map(slot => {
+          const match = eatenToday.find(r => r.is_eaten && r.meal_id === slot.selectedMealId)
+          return match ? { ...slot, taken: true, scheduleId: match.id } : slot
+        })
+
+        if (!cancelled) setSlots(merged)
+      } catch (err) {
+        if (!cancelled) setPageError(err.message || 'Failed to load meal plan.')
+      } finally {
+        if (!cancelled) setPageLoading(false)
+      }
+    }
+    load()
+    return () => { cancelled = true }
   }, [id])
+
 
   const [showEditStructure, setShowEditStructure] = useState(false)
   const [editCollectionSlot, setEditCollectionSlot] = useState(null)
+
+  // ── Enrollment ─────────────────────────────────────────────────────────
+  const [enrollment, setEnrollment] = useState(null)
+  const [enrolling, setEnrolling] = useState(false)
+  const [enrollError, setEnrollError] = useState('')
+
+  useEffect(() => {
+    getActiveMealEnrollment()
+      .then(e => { if (e.meal_plan_id === id) setEnrollment(e) })
+      .catch(() => {})
+  }, [id])
+
+  async function handleEnroll() {
+    setEnrolling(true); setEnrollError('')
+    try {
+      const e = await createEnrollment({ mealPlanId: id })
+      setEnrollment(e)
+    } catch (err) { setEnrollError(err.message) }
+    finally { setEnrolling(false) }
+  }
+
+  async function handleEnrollStatus(newStatus) {
+    if (!enrollment) return
+    setEnrolling(true); setEnrollError('')
+    try {
+      const e = await updateEnrollmentStatus(enrollment.id, newStatus)
+      setEnrollment(e)
+    } catch (err) { setEnrollError(err.message) }
+    finally { setEnrolling(false) }
+  }
   const totalCalories = slots.reduce((sum, slot) => {
     const meal = slot.meals.find(m => m.id === slot.selectedMealId) || slot.meals[0]
     return sum + (slot.taken && meal ? meal.calories : 0)
@@ -619,8 +673,39 @@ export default function MealPlanPage() {
     return sum + (meal ? meal.calories : 0)
   }, 0)
 
-  function toggleTaken(slotId) {
-    setSlots(s => s.map(sl => sl.id === slotId ? { ...sl, taken: !sl.taken } : sl))
+  async function toggleTaken(slotId) {
+    const slot = slots.find(sl => sl.id === slotId)
+    if (!slot) return
+    const meal = slot.meals.find(m => m.id === slot.selectedMealId) || slot.meals[0]
+    if (!meal) return
+    if (!slot.taken) {
+      setSlots(s => s.map(sl => sl.id === slotId ? { ...sl, taken: true } : sl))
+      try {
+        const todayIso = new Date().toISOString()
+        const rawType = (slot.meal_type || slot.label || 'snack').toLowerCase().replace(/[^a-z]/g, '')
+        const validType = ['breakfast','lunch','dinner','snack'].includes(rawType) ? rawType : 'snack'
+        const record = await createMealSchedule({
+          meal_id: meal.id,
+          scheduled_date: todayIso,
+          meal_type: validType,
+          is_eaten: true,
+          eaten_date: todayIso,
+        })
+        setSlots(s => s.map(sl => sl.id === slotId ? { ...sl, scheduleId: record.id } : sl))
+      } catch (err) {
+        setSlots(s => s.map(sl => sl.id === slotId ? { ...sl, taken: false } : sl))
+        console.error('Failed to mark meal taken:', err.message)
+      }
+    } else {
+      setSlots(s => s.map(sl => sl.id === slotId ? { ...sl, taken: false } : sl))
+      if (slot.scheduleId) {
+        try { await updateMealEatenStatus(slot.scheduleId, false) }
+        catch (err) {
+          setSlots(s => s.map(sl => sl.id === slotId ? { ...sl, taken: true } : sl))
+          console.error('Failed to unmark meal:', err.message)
+        }
+      }
+    }
   }
 
   function selectMeal(slotId, mealId) {
@@ -720,6 +805,64 @@ export default function MealPlanPage() {
         <div className="flex items-center gap-2 shrink-0">
           <span className="text-body-sm text-text-disabled">Planned:</span>
           <span className="text-body-sm font-semibold text-text-headings">{plannedCalories} kcal</span>
+        </div>
+
+        {/* ── Inline enrollment row ── */}
+        <div className="w-full flex items-center gap-3 flex-wrap pt-1 border-t border-border-primary mt-1">
+          <span className="text-body-sm font-bold text-text-headings">Enrollment:</span>
+          {enrollment ? (
+            <>
+              <span className={cn(
+                'text-body-xs font-bold px-2.5 py-1 rounded-full border',
+                enrollment.status === 'active'    && 'bg-success-100 text-success-700 border-success-200',
+                enrollment.status === 'paused'    && 'bg-warning-100 text-warning-700 border-warning-200',
+                enrollment.status === 'completed' && 'bg-information-100 text-information-700 border-information-200',
+                enrollment.status === 'dropped'   && 'bg-error-100 text-error-600 border-error-200',
+              )}>
+                {enrollment.status.charAt(0).toUpperCase() + enrollment.status.slice(1)}
+              </span>
+              {enrollment.status === 'active' && (
+                <>
+                  <button onClick={() => handleEnrollStatus('paused')} disabled={enrolling}
+                    className="px-3 py-1 rounded-lg text-body-xs font-bold border border-warning-300 text-warning-700 bg-warning-50 hover:bg-warning-100 transition-colors disabled:opacity-50">
+                    {enrolling ? '…' : '⏸ Pause'}
+                  </button>
+                  <button onClick={() => handleEnrollStatus('completed')} disabled={enrolling}
+                    className="px-3 py-1 rounded-lg text-body-xs font-bold border border-information-300 text-information-700 bg-information-50 hover:bg-information-100 transition-colors disabled:opacity-50">
+                    {enrolling ? '…' : '✓ Complete'}
+                  </button>
+                  <button onClick={() => handleEnrollStatus('dropped')} disabled={enrolling}
+                    className="px-3 py-1 rounded-lg text-body-xs font-bold border border-error-200 text-error-500 bg-error-50 hover:bg-error-100 transition-colors disabled:opacity-50">
+                    {enrolling ? '…' : '✕ Drop'}
+                  </button>
+                </>
+              )}
+              {enrollment.status === 'paused' && (
+                <>
+                  <button onClick={() => handleEnrollStatus('active')} disabled={enrolling}
+                    className="px-3 py-1 rounded-lg text-body-xs font-bold bg-success-600 text-neutral-white hover:bg-success-700 transition-colors disabled:opacity-50">
+                    {enrolling ? '…' : '▶ Resume'}
+                  </button>
+                  <button onClick={() => handleEnrollStatus('dropped')} disabled={enrolling}
+                    className="px-3 py-1 rounded-lg text-body-xs font-bold border border-error-200 text-error-500 bg-error-50 hover:bg-error-100 transition-colors disabled:opacity-50">
+                    {enrolling ? '…' : '✕ Drop'}
+                  </button>
+                </>
+              )}
+              {(enrollment.status === 'completed' || enrollment.status === 'dropped') && (
+                <button onClick={handleEnroll} disabled={enrolling}
+                  className="px-3 py-1 rounded-lg text-body-xs font-bold bg-success-600 text-neutral-white hover:bg-success-700 transition-colors disabled:opacity-50">
+                  {enrolling ? '…' : '↩ Re-enroll'}
+                </button>
+              )}
+            </>
+          ) : (
+            <button onClick={handleEnroll} disabled={enrolling}
+              className="px-4 py-1.5 rounded-lg text-body-sm font-bold bg-meals-prim text-neutral-white hover:bg-meals-prim/90 transition-colors shadow-sm disabled:opacity-50">
+              {enrolling ? 'Enrolling…' : '+ Enroll in This Plan'}
+            </button>
+          )}
+          {enrollError && <span className="text-body-xs text-text-error ml-auto">{enrollError}</span>}
         </div>
       </div>
 

@@ -3,6 +3,7 @@ import { Button } from "../components/atoms/Button.jsx";
 import { cn } from "../components/utils.js";
 import { DefinedField } from "../components/molecules/DefinedField.jsx";
 import { getMeals, getFilterOptions, getMeal } from "../api/mealsService.js";
+import { getMealPlans, addMealSlot } from "../api/mealPlansService.js";
 
 export default function MealsPage() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -22,30 +23,31 @@ export default function MealsPage() {
   const [showAddToPlanModal, setShowAddToPlanModal] = useState(false);
   const [mealToAddToPlan, setMealToAddToPlan] = useState(null);
   const [targetPlanId, setTargetPlanId] = useState("");
-  const [targetSlot, setTargetSlot] = useState("");
+  const [targetSlot, setTargetSlot] = useState("Breakfast");
   const [toastMessage, setToastMessage] = useState("");
+  const [isAddingToPlan, setIsAddingToPlan] = useState(false);
 
-  // Load plans and filters on component mount
+  // Meal slot labels shown in the UI → backend meal_type values
+  const MEAL_SLOTS = ["Breakfast", "Lunch", "Dinner", "Snack"];
+  function labelToMealType(label) {
+    return label.toLowerCase().replace("snacks", "snack");
+  }
+
+  // Load plans from backend + filters on component mount
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem("user_plans");
-      const parsed = stored ? JSON.parse(stored) : [];
-      const dietPlans = parsed.filter((p) => p.defaultTab === "Diet");
-      setUserPlans(dietPlans);
-      if (dietPlans.length > 0) {
-        setTargetPlanId(dietPlans[0].id);
-        const slots = dietPlans[0].mealSlots ||
-          dietPlans[0].rawMealSlots || [
-            "Breakfast",
-            "Lunch",
-            "Dinner",
-            "Snacks",
-          ];
-        setTargetSlot(slots[0]);
+    // Fetch user's meal plans from backend
+    const fetchPlans = async () => {
+      try {
+        const plans = await getMealPlans();
+        setUserPlans(plans || []);
+        if (plans && plans.length > 0) {
+          setTargetPlanId(plans[0].id);
+        }
+      } catch (err) {
+        console.error("Failed to fetch meal plans", err);
       }
-    } catch (e) {
-      console.error(e);
-    }
+    };
+    fetchPlans();
 
     // Fetch filter groups from the backend
     const fetchFilters = async () => {
@@ -140,80 +142,41 @@ export default function MealsPage() {
     }
   };
 
-  // Dynamic slot updating when plan selection changes
+  // Plan selection change — reset slot to Breakfast
   const handlePlanChange = (planId) => {
     setTargetPlanId(planId);
-    const selectedPlan = userPlans.find((p) => p.id === planId);
-    if (selectedPlan) {
-      const slots = selectedPlan.mealSlots ||
-        selectedPlan.rawMealSlots || ["Breakfast", "Lunch", "Dinner", "Snacks"];
-      setTargetSlot(slots[0]);
-    }
+    setTargetSlot("Breakfast");
   };
 
-  // Add meal to selected plan & slot in LocalStorage
-  const handleAddMealToPlan = () => {
+  // Add meal to selected plan & slot via backend POST /meal/plans/{id}/slots
+  const handleAddMealToPlan = async () => {
     if (!targetPlanId || !targetSlot || !mealToAddToPlan) return;
 
+    setIsAddingToPlan(true);
     try {
-      const stored = localStorage.getItem("user_plans");
-      const parsed = stored ? JSON.parse(stored) : [];
-
-      const updatedPlans = parsed.map((plan) => {
-        if (plan.id === targetPlanId) {
-          if (!plan.slots) {
-            const slotsToUse = plan.mealSlots ||
-              plan.rawMealSlots || ["Breakfast", "Lunch", "Dinner", "Snacks"];
-            plan.slots = slotsToUse.map((label) => ({
-              id: label.toLowerCase(),
-              label: label,
-              time:
-                label === "Breakfast"
-                  ? "7:00 AM"
-                  : label === "Lunch"
-                    ? "12:30 PM"
-                    : "7:00 PM",
-              meals: [],
-              selectedMealId: null,
-              taken: false,
-            }));
-          }
-
-          plan.slots = plan.slots.map((s) => {
-            if (s.label.toLowerCase() === targetSlot.toLowerCase()) {
-              const exists = s.meals.some((m) => m.id === mealToAddToPlan.id);
-              if (!exists) {
-                s.meals.push({
-                  id: mealToAddToPlan.id,
-                  name: mealToAddToPlan.title, // Backend uses title
-                  calories: mealToAddToPlan.nutrition?.calories_cal || 0,
-                  protein: mealToAddToPlan.nutrition?.protein_g || 0,
-                  carbs: mealToAddToPlan.nutrition?.carbohydrates_g || 0,
-                  fat: mealToAddToPlan.nutrition?.total_fat_g || 0,
-                  image: mealToAddToPlan.image_url,
-                  warning: null,
-                });
-              }
-              s.selectedMealId = mealToAddToPlan.id;
-            }
-            return s;
-          });
-        }
-        return plan;
+      const meal_type = labelToMealType(targetSlot); // e.g. "breakfast"
+      await addMealSlot(targetPlanId, {
+        meal_id: mealToAddToPlan.id,
+        meal_type,
       });
 
-      localStorage.setItem("user_plans", JSON.stringify(updatedPlans));
-
-      const planName =
-        userPlans.find((p) => p.id === targetPlanId)?.name || "Plan";
+      const planName = userPlans.find((p) => p.id === targetPlanId)?.title || "Plan";
       setToastMessage(
         `"${mealToAddToPlan.title}" added to ${targetSlot} in "${planName}"!`,
       );
       setShowAddToPlanModal(false);
-
       setTimeout(() => setToastMessage(""), 3000);
     } catch (e) {
-      console.error(e);
+      // 409 means this meal is already in that slot — show friendly message
+      if (e.message?.includes("409") || e.message?.toLowerCase().includes("already") || e.message?.toLowerCase().includes("duplicate")) {
+        setToastMessage(`"${mealToAddToPlan.title}" is already in that slot.`);
+      } else {
+        setToastMessage(`Failed to add meal: ${e.message}`);
+      }
+      setShowAddToPlanModal(false);
+      setTimeout(() => setToastMessage(""), 4000);
+    } finally {
+      setIsAddingToPlan(false);
     }
   };
 
@@ -729,7 +692,7 @@ export default function MealsPage() {
                     onChange={handlePlanChange}
                     options={userPlans.map((plan) => ({
                       value: plan.id,
-                      label: plan.name,
+                      label: plan.title,
                     }))}
                     className="mb-4"
                   />
@@ -739,16 +702,7 @@ export default function MealsPage() {
                     label="Meal Slot"
                     value={targetSlot}
                     onChange={setTargetSlot}
-                    options={(
-                      userPlans.find((p) => p.id === targetPlanId)?.mealSlots ||
-                      userPlans.find((p) => p.id === targetPlanId)
-                        ?.rawMealSlots || [
-                        "Breakfast",
-                        "Lunch",
-                        "Dinner",
-                        "Snacks",
-                      ]
-                    ).map((slot) => ({ value: slot, label: slot }))}
+                    options={MEAL_SLOTS.map((slot) => ({ value: slot, label: slot }))}
                   />
                 </>
               ) : (
@@ -774,10 +728,10 @@ export default function MealsPage() {
               <Button
                 variant="meals-primary"
                 className="flex-1 font-bold shadow-md"
-                disabled={userPlans.length === 0}
+                disabled={userPlans.length === 0 || isAddingToPlan}
                 onClick={handleAddMealToPlan}
               >
-                Confirm Add
+                {isAddingToPlan ? "Adding..." : "Confirm Add"}
               </Button>
             </div>
           </div>
