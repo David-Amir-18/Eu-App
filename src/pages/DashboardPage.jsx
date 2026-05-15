@@ -6,8 +6,8 @@ import { getUserMetrics } from '../api/authService.js'
 import { getWorkoutPlan } from '../api/workoutsService.js'
 import { getMealPlan } from '../api/mealPlansService.js'
 import { Menu } from '../components/molecules/Menu.jsx'
-import { getWorkoutSessions } from '../api/workoutTrackingService.js'
-import { getEatenMeals } from '../api/mealTrackingService.js'
+import { getWorkoutSessions, createWorkoutSession, logWorkoutSet } from '../api/workoutTrackingService.js'
+import { getEatenMeals, createMealSchedule, updateMealEatenStatus } from '../api/mealTrackingService.js'
 import { getDailyLog, upsertDailyLog, listDailyLogs } from '../api/dailyLogsService.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import { getRehabPlan } from '../api/rehabService.js'
@@ -361,6 +361,7 @@ export default function DashboardPage() {
           }
           const normalised = fullPlan.slot_meals.map(sm => ({
             id:             sm.id,
+            meal_type:      sm.meal_type,
             label:          sm.meal_type.charAt(0).toUpperCase() + sm.meal_type.slice(1),
             time:           SLOT_TIMES[sm.meal_type] || '',
             meals: sm.meal ? [{
@@ -374,7 +375,17 @@ export default function DashboardPage() {
             }] : [],
             selectedMealId: sm.meal?.id ?? null,
             taken:          false,
+            scheduleId:     null,
           }))
+          // Hydrate today's eaten state
+          try {
+            const todayEatenRes = await getEatenMeals({ date: localDateStr() })
+            const todayEaten = todayEatenRes.results || []
+            todayEaten.forEach(m => {
+              const slot = normalised.find(s => s.meal_type === m.meal_type)
+              if (slot) { slot.taken = true; slot.scheduleId = m.id }
+            })
+          } catch (_) {}
           setDietPlan({ ...fullPlan, slots: normalised })
         } else {
           setHasMealHistory(false)
@@ -472,26 +483,113 @@ export default function DashboardPage() {
     }
   }
 
+  const [dashboardSessionId, setDashboardSessionId] = useState(null)
+
   const toggleExercise = async (routineId, idx) => {
     if (!workoutPlan) return
-    const newPlan = { ...workoutPlan }
-    const rIdx = newPlan.plan_routines.findIndex(r => r.id === routineId)
+    const rIdx = workoutPlan.plan_routines.findIndex(r => r.id === routineId)
     if (rIdx === -1) return
-    
-    const ex = newPlan.plan_routines[rIdx].exercises[idx]
+    const ex = workoutPlan.plan_routines[rIdx].exercises[idx]
     const current = ex.is_completed || ex.taken || false
-    const nxt = !current
-    
-        newPlan.plan_routines[rIdx].exercises[idx] = { ...ex, is_completed: nxt, taken: nxt }
-    setWorkoutPlan(newPlan)
+    const next = !current
+
+    // Optimistic update
+    const updatedPlan = JSON.parse(JSON.stringify(workoutPlan))
+    updatedPlan.plan_routines[rIdx].exercises[idx] = { ...ex, is_completed: next, taken: next }
+    setWorkoutPlan(updatedPlan)
+
+    if (next) {
+      try {
+        let sessionId = dashboardSessionId
+        if (!sessionId) {
+          const session = await createWorkoutSession({
+            workout_plan_id: workoutPlan.id,
+            routine_id:      routineId,
+            scheduled_date:  localDateStr(),
+            status:          'in_progress',
+          })
+          sessionId = session.id
+          setDashboardSessionId(sessionId)
+          setWorkoutSessions(prev => [session, ...prev])
+        }
+        const exId = ex.exercise_id || ex.exercise?.id
+        if (exId && sessionId) {
+          await logWorkoutSet(sessionId, {
+            exercise_id:    exId,
+            set_number:     1,
+            reps_completed: ex.reps   ? parseInt(ex.reps)   : undefined,
+            weight_used:    ex.weight_kg ? parseFloat(ex.weight_kg) : undefined,
+            is_completed:   true,
+          })
+        }
+      } catch (err) {
+        console.error('Failed to log exercise to backend', err)
+        // Rollback
+        const rb = JSON.parse(JSON.stringify(workoutPlan))
+        rb.plan_routines[rIdx].exercises[idx] = { ...ex, is_completed: false, taken: false }
+        setWorkoutPlan(rb)
+      }
+    }
   }
 
-  const toggleMeal = (slotId) => {
+  const toggleMeal = async (slotId) => {
     if (!dietPlan) return
+    const slot = dietPlan.slots.find(s => s.id === slotId)
+    if (!slot) return
+    const wasTaken = slot.taken
+
+    // Optimistic update
     setDietPlan(prev => ({
       ...prev,
-      slots: prev.slots.map(sl => sl.id === slotId ? { ...sl, taken: !sl.taken } : sl)
+      slots: prev.slots.map(sl => sl.id === slotId ? { ...sl, taken: !wasTaken } : sl)
     }))
+
+    try {
+      const today = localDateStr()
+      if (!wasTaken) {
+        // Mark eaten → create schedule record
+        const mealId = slot.selectedMealId || slot.meals?.[0]?.id
+        const schedule = await createMealSchedule({
+          meal_id:         mealId,
+          meal_plan_id:    dietPlan.id,
+          meal_type:       slot.meal_type || slot.label.toLowerCase(),
+          scheduled_date:  today,
+          is_eaten:        true,
+          eaten_date:      today,
+        })
+        setDietPlan(prev => ({
+          ...prev,
+          slots: prev.slots.map(sl =>
+            sl.id === slotId ? { ...sl, taken: true, scheduleId: schedule.id } : sl
+          )
+        }))
+        // Update analytics
+        setEatenMeals(prev => [...prev, {
+          ...schedule,
+          meal_type: slot.meal_type || slot.label.toLowerCase(),
+          scheduled_date: today,
+        }])
+      } else {
+        // Untoggle → unmark eaten
+        if (slot.scheduleId) {
+          await updateMealEatenStatus(slot.scheduleId, false)
+          setEatenMeals(prev => prev.filter(m => m.id !== slot.scheduleId))
+        }
+        setDietPlan(prev => ({
+          ...prev,
+          slots: prev.slots.map(sl =>
+            sl.id === slotId ? { ...sl, taken: false, scheduleId: null } : sl
+          )
+        }))
+      }
+    } catch (err) {
+      console.error('Failed to update meal status', err)
+      // Rollback
+      setDietPlan(prev => ({
+        ...prev,
+        slots: prev.slots.map(sl => sl.id === slotId ? { ...sl, taken: wasTaken } : sl)
+      }))
+    }
   }
 
   // Find today's routine
