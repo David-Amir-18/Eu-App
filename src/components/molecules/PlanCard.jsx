@@ -451,11 +451,11 @@ export function PlanCard({
               >
                 View Plan
               </Button>
-              {planType !== 'Rehab' && (
+              {/* {planType !== 'Rehab' || 'Meals' || 'Workouts' && (
                 <Button variant={cfg.btnPrimary} size="sm">
                   {ctaLabel}
                 </Button>
-              )}
+              )} */}
             </>
           )}
 

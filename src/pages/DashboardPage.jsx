@@ -220,10 +220,10 @@ function ExerciseCompletionCard({ sessions }) {
 // ── Meal Type Donut ─────────────────────────────────────────────────────
 function MealTypeDonut({ eatenMeals }) {
   const TYPES = [
-    { key: 'breakfast', label: 'Breakfast', emoji: '🌅', color: '#F59E0B' },
-    { key: 'lunch',     label: 'Lunch',     emoji: '☀️',    color: '#10B981' },
-    { key: 'dinner',   label: 'Dinner',    emoji: '🌙',   color: '#6366F1' },
-    { key: 'snack',    label: 'Snack',     emoji: '🍎',   color: '#F43F5E' },
+    { key: 'breakfast', label: 'Breakfast', emoji: '', color: '#F59E0B' },
+    { key: 'lunch',     label: 'Lunch',     emoji: '',    color: '#10B981' },
+    { key: 'dinner',   label: 'Dinner',    emoji: '',   color: '#6366F1' },
+    { key: 'snack',    label: 'Snack',     emoji: '',   color: '#F43F5E' },
   ]
   const counts = {}
   TYPES.forEach(t => { counts[t.key] = eatenMeals.filter(m => m.meal_type === t.key).length })
@@ -1111,10 +1111,10 @@ export default function DashboardPage() {
 
               {/* KPI stat cards */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <StatCard emoji="🔥" label="Current Streak"   value={rehabStreaks?.current_streak ?? 0}  unit="days" />
-                <StatCard emoji="🏆" label="Longest Streak"   value={rehabStreaks?.longest_streak ?? 0}  unit="days" />
-                <StatCard emoji="🧘" label="Rehab Sessions"   value={rehabSessions.length}               unit="completed" />
-                <StatCard emoji="💪" label="Workout Sessions" value={workoutSessions.length}             unit="completed" />
+                <StatCard emoji="" label="Current Streak"   value={rehabStreaks?.current_streak ?? 0}  unit="days" />
+                <StatCard emoji="" label="Longest Streak"   value={rehabStreaks?.longest_streak ?? 0}  unit="days" />
+                <StatCard emoji="" label="Rehab Sessions"   value={rehabSessions.length}               unit="completed" />
+                <StatCard className="bg-surface-primary" emoji="" label="Workout Sessions" value={workoutSessions.length}  unit="completed" />
               </div>
 
               {/* Rehab bar chart + exercise completion donut */}
