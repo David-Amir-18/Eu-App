@@ -3,6 +3,9 @@ import { useEffect, useState } from 'react'
 import { cn } from '../utils.js'
 import { getUserMetrics } from '../../api/authService.js'
 import { useAuth } from '../../context/AuthContext.jsx'
+import { useTheme } from '../../context/ThemeContext.jsx'
+import { getEatenMeals } from '../../api/mealTrackingService.js'
+import { getWorkoutSessions } from '../../api/workoutTrackingService.js'
 
 // ── Icons ──────────────────────────────────────────────────────────────────────
 function IconDashboard() {
@@ -120,6 +123,25 @@ function IconBolt() {
   )
 }
 
+function IconSun() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+    </svg>
+  )
+}
+
+function IconMoon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+    </svg>
+  )
+}
+
 // ── Streak badge ───────────────────────────────────────────────────────────────
 function StreakBadge({ label, count }) {
   return (
@@ -155,15 +177,43 @@ function StatRow({ label, value, max }) {
 }
 
 // ── Nav items ──────────────────────────────────────────────────────────────────
-import { getDailyLog } from '../../api/dailyLogsService.js'
 
 export function DashboardSidebar() {
   const { isAdmin, user, logout } = useAuth()
+  const { isDark, setTheme } = useTheme()
   const [isOpen, setIsOpen] = useState(false)
   const [profile, setProfile] = useState(null)
-  const [dailyLog, setDailyLog] = useState(null)
+  const [caloriesConsumed, setCaloriesConsumed] = useState(0)
+  const [workoutsCompleted, setWorkoutsCompleted] = useState(0)
   const userId = user?.id
   const username = user?.name || user?.email?.split('@')[0] || 'User'
+
+  function todayStr() {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+  }
+
+  async function fetchLiveStats() {
+    try {
+      const [mealsRes, sessionsRes] = await Promise.allSettled([
+        getEatenMeals({ date: todayStr() }),
+        getWorkoutSessions({ status: 'completed', from_date: todayStr(), to_date: todayStr() }),
+      ])
+
+      if (mealsRes.status === 'fulfilled') {
+        const meals = mealsRes.value?.results || []
+        const totalCal = meals.reduce((sum, m) => {
+          const cal = m.meal?.nutrition?.calories_cal || m.meal?.calories_cal || 0
+          return sum + cal
+        }, 0)
+        setCaloriesConsumed(Math.round(totalCal))
+      }
+
+      if (sessionsRes.status === 'fulfilled') {
+        setWorkoutsCompleted((sessionsRes.value?.results || []).length)
+      }
+    } catch (_) {}
+  }
 
   const baseNavItems = [
     { to: '/dashboard', label: 'Dashboard', icon: <IconDashboard />, end: true },
@@ -181,31 +231,24 @@ export function DashboardSidebar() {
 
   useEffect(() => {
     if (!userId) return
-    
-    const now = new Date()
-    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-    
-    const fetchData = async () => {
-      try {
-        const [profileData, logData] = await Promise.allSettled([
-          getUserMetrics(),
-          getDailyLog(todayStr)
-        ])
-        
-        if (profileData.status === 'fulfilled') setProfile(profileData.value)
-        if (logData.status === 'fulfilled') setDailyLog(logData.value)
-      } catch (err) {
-        console.error('Sidebar fetch error:', err)
-      }
+    const load = async () => {
+      try { const p = await getUserMetrics(); setProfile(p) } catch (_) {}
+      await fetchLiveStats()
     }
-
-    fetchData()
+    load()
+    // Refresh stats every 60 s as a background fallback
+    const interval = setInterval(fetchLiveStats, 60_000)
+    // Also refresh immediately whenever any page fires this event
+    const handleRefresh = () => fetchLiveStats()
+    window.addEventListener('sidebarStatsRefresh', handleRefresh)
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('sidebarStatsRefresh', handleRefresh)
+    }
   }, [userId])
 
   const calorieTarget = profile?.daily_calorie_target ?? 2000
-  const caloriesConsumed = dailyLog?.calories_consumed ?? 0
-  const workoutsCompleted = dailyLog?.workouts_completed ?? 0
-  const workoutsGoal = 5 
+  const workoutsGoal  = 3 
 
   return (
     <>
@@ -285,8 +328,20 @@ export function DashboardSidebar() {
         ))}
       </nav>
 
+      {/* Dark mode toggle */}
+      <div className="px-3 pt-3 border-t border-border-primary">
+        <button
+          onClick={() => setTheme(isDark ? 'light' : 'dark')}
+          className="flex items-center gap-3 px-3 py-2 rounded-lg text-body-md font-semibold text-text-body hover:bg-neutral-100 hover:text-text-action transition-colors w-full"
+          aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+        >
+          {isDark ? <IconSun /> : <IconMoon />}
+          {isDark ? 'Light Mode' : 'Dark Mode'}
+        </button>
+      </div>
+
       {/* Logout */}
-      <div className="px-3 py-4 border-t border-border-primary">
+      <div className="px-3 py-3">
         <button
           onClick={() => {
             logout()

@@ -17,6 +17,7 @@ import CreatePlanPage from './pages/CreatePlanPage.jsx'
 import WorkoutsPage from './pages/WorkoutsPage.jsx'
 import RehabPage from './pages/RehabPage.jsx'
 import { AuthProvider } from './context/AuthContext.jsx'
+import { ThemeProvider } from './context/ThemeContext.jsx'
 import ProtectedRoute from './protectedRoutes/ProtectedRoutes.jsx'
 import Help from './pages/Help.jsx'
 import AdminHub from './pages/AdminHub.jsx'
@@ -27,54 +28,55 @@ import { useAuth } from './context/AuthContext.jsx'
 
 function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <Routes>
-          {/* Public Routes */}
-          <Route element={<AppLayout />}>
-            <Route index element={<Home />} />
-          </Route>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
-          <Route path="/contact" element={<Contact />} />
-          <Route path="/help" element={<Help />} />
-          <Route 
-            path="/admin" 
-            element={
-              <AdminRouteGuard>
-                <AdminHub />
-              </AdminRouteGuard>
-            } 
-          />
-          {/* Protected Routes */}
-          <Route element={<ProtectedRoute />}>
-            <Route element={<DashboardLayout />}>
-              <Route path="/dashboard" element={<DashboardPage />} />
-              <Route path="/meals" element={<MealsPage />} />
-              <Route path="/workouts" element={<WorkoutsPage />} />
-              <Route path="/rehab" element={<RehabPage />} />
-              <Route path="/plans" element={<PlansPage />} />
-              <Route path="/plans/create" element={<CreatePlanPage />} />
-              <Route path="/plans/workout/:id" element={<WorkoutPlanPage />} />
-              <Route path="/plans/rehab/:id" element={<RehabPlanPage />} />
-              <Route path="/plans/diet/:id" element={<MealPlanPage />} />
-              <Route path="/profile" element={<ProfilePage />} />
-              <Route path="/onboarding" element={<OnboardingPage />} />
-              <Route path="/help" element={<Help />} />
-              <Route
-                path="/admin"
-                element={
-                  <AdminRouteGuard>
-                    <AdminHub />
-                  </AdminRouteGuard>
-                }
-              />
+    <ThemeProvider>
+      <AuthProvider>
+        <BrowserRouter>
+          <Routes>
+            {/* Public Routes */}
+            <Route element={<AppLayout />}>
+              <Route index element={<Home />} />
             </Route>
-          </Route>
-
-        </Routes>
-      </BrowserRouter>
-    </AuthProvider>
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
+            <Route path="/contact" element={<Contact />} />
+            <Route path="/help" element={<Help />} />
+            <Route 
+              path="/admin" 
+              element={
+                <AdminRouteGuard>
+                  <AdminHub />
+                </AdminRouteGuard>
+              } 
+            />
+            {/* Protected Routes */}
+            <Route element={<ProtectedRoute />}>
+              <Route element={<DashboardLayout />}>
+                <Route path="/dashboard" element={<DashboardPage />} />
+                <Route path="/meals" element={<MealsPage />} />
+                <Route path="/workouts" element={<WorkoutsPage />} />
+                <Route path="/rehab" element={<RehabPage />} />
+                <Route path="/plans" element={<PlansPage />} />
+                <Route path="/plans/create" element={<CreatePlanPage />} />
+                <Route path="/plans/workout/:id" element={<WorkoutPlanPage />} />
+                <Route path="/plans/rehab/:id" element={<RehabPlanPage />} />
+                <Route path="/plans/diet/:id" element={<MealPlanPage />} />
+                <Route path="/profile" element={<ProfilePage />} />
+                <Route path="/onboarding" element={<OnboardingPage />} />
+                <Route path="/help" element={<Help />} />
+                <Route
+                  path="/admin"
+                  element={
+                    <AdminRouteGuard>
+                      <AdminHub />
+                    </AdminRouteGuard>
+                  }
+                />
+              </Route>
+            </Route>
+          </Routes>
+        </BrowserRouter>
+      </AuthProvider>
+    </ThemeProvider>
   )
 }
 export default App

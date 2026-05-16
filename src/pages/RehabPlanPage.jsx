@@ -645,6 +645,7 @@ function RehabSessionLogger({ open, onClose, routine, planId, resumeSession, onS
     setCompleting(true); setError("");
     try {
       await updateRehabSessionStatus(session.id, { status: "completed" });
+      window.dispatchEvent(new CustomEvent('sidebarStatsRefresh'));
       if (onSessionCompleted) onSessionCompleted();
       else onClose();
     } catch (err) { setError(err.message); setCompleting(false); }

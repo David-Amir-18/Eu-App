@@ -346,6 +346,7 @@ function WorkoutSessionLogger({ open, onClose, routine, planId, onSessionComplet
     setCompleting(true); setError('')
     try {
       await updateWorkoutSessionStatus(session.id, { status: 'completed' })
+      window.dispatchEvent(new CustomEvent('sidebarStatsRefresh'))
       onSessionCompleted?.()
       onClose()
     } catch (err) {

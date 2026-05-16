@@ -521,6 +521,7 @@ export default function DashboardPage() {
             weight_used:    ex.weight_kg ? parseFloat(ex.weight_kg) : undefined,
             is_completed:   true,
           })
+          window.dispatchEvent(new CustomEvent('sidebarStatsRefresh'))
         }
       } catch (err) {
         console.error('Failed to log exercise to backend', err)
@@ -569,11 +570,13 @@ export default function DashboardPage() {
           meal_type: slot.meal_type || slot.label.toLowerCase(),
           scheduled_date: today,
         }])
+        window.dispatchEvent(new CustomEvent('sidebarStatsRefresh'))
       } else {
         // Untoggle → unmark eaten
         if (slot.scheduleId) {
           await updateMealEatenStatus(slot.scheduleId, false)
           setEatenMeals(prev => prev.filter(m => m.id !== slot.scheduleId))
+          window.dispatchEvent(new CustomEvent('sidebarStatsRefresh'))
         }
         setDietPlan(prev => ({
           ...prev,

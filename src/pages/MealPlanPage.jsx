@@ -692,6 +692,7 @@ export default function MealPlanPage() {
           eaten_date: todayIso,
         })
         setSlots(s => s.map(sl => sl.id === slotId ? { ...sl, scheduleId: record.id } : sl))
+        window.dispatchEvent(new CustomEvent('sidebarStatsRefresh'))
       } catch (err) {
         setSlots(s => s.map(sl => sl.id === slotId ? { ...sl, taken: false } : sl))
         console.error('Failed to mark meal taken:', err.message)
@@ -699,7 +700,10 @@ export default function MealPlanPage() {
     } else {
       setSlots(s => s.map(sl => sl.id === slotId ? { ...sl, taken: false } : sl))
       if (slot.scheduleId) {
-        try { await updateMealEatenStatus(slot.scheduleId, false) }
+        try {
+          await updateMealEatenStatus(slot.scheduleId, false)
+          window.dispatchEvent(new CustomEvent('sidebarStatsRefresh'))
+        }
         catch (err) {
           setSlots(s => s.map(sl => sl.id === slotId ? { ...sl, taken: true } : sl))
           console.error('Failed to unmark meal:', err.message)

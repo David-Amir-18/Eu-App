@@ -432,3 +432,70 @@
     animation: fadeSlideUp 0.6s ease-out forwards;
   }
 }
+
+/* ── Dark mode overrides ───────────────────────────────────────────────────────
+   Applied when the <html> element has the `.dark` class.
+   We only override the *semantic* tokens so all components inherit the theme
+   automatically without any per-component changes.
+   ─────────────────────────────────────────────────────────────────────────── */
+.dark {
+  /* Neutral tones used for hover / subtle backgrounds */
+  --color-neutral-100: #1e1e32;
+  --color-neutral-200: #252540;
+  --color-neutral-300: #4a4a60;
+  --color-neutral-400: #626278;
+  --color-neutral-500: #8080a0;
+
+  /* Semantic text */
+  --color-text-headings:      #e8e8fa;
+  --color-text-body:          #b0b0c8;
+  --color-text-action:        #5ab8e8;
+  --color-text-action-hover:  #7cd4f8;
+  --color-text-disabled:      #666680;
+  --color-text-success:       #4de870;
+  --color-text-error:         #ff6467;
+  --color-text-on-action:     #ffffff;
+  --color-text-on-disabled:   #9898b8;
+
+  /* Surfaces */
+  --color-surface-page:              #0f0f1c;
+  --color-surface-primary:           #17172c;
+  --color-surface-success:           #0d2016;
+  --color-surface-error:             #2a0d0d;
+  --color-surface-disabled:          #242438;
+  --color-surface-disabled-selected: #484868;
+  --color-surface-warning:           #2a1205;
+  --color-surface-action:            #007cbe;
+  --color-surface-action-hover:      #0090d0;
+  --color-surface-action-hover2:     #0c2040;
+  --color-surface-information:       #091628;
+
+  /* Borders */
+  --color-border-primary:       #28283e;
+  --color-border-secondary:     #1a5a8a;
+  --color-border-success:       #1a5a2a;
+  --color-border-error:         #8a1a1a;
+  --color-border-warning:       #8a3a05;
+  --color-border-information:   #1a408a;
+  --color-border-disabled:      #383850;
+  --color-border-focus:         #5ab8e8;
+  --color-border-action:        #007cbe;
+  --color-border-action-hover:  #0090d0;
+
+  /* Icons */
+  --color-icon-primary:       #8080a0;
+  --color-icon-information:   #5ab0ff;
+  --color-icon-success:       #4de870;
+  --color-icon-warning:       #fe8240;
+  --color-icon-error:         #ff6467;
+  --color-icon-action:        #5ab8e8;
+  --color-icon-action-hover:  #7cd4f8;
+  --color-icon-on-action:     #ffffff;
+  --color-icon-on-disabled:   #9898b8;
+
+  /* Warning / info / success / error light backgrounds (for badges etc.) */
+  --color-warning-100:     #2a1205;
+  --color-information-100: #091628;
+  --color-success-100:     #0d2016;
+  --color-error-100:       #2a0d0d;
+}
