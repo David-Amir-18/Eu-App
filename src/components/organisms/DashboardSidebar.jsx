@@ -332,7 +332,12 @@ export function DashboardSidebar() {
       <div className="px-3 pt-3 border-t border-border-primary">
         <button
           onClick={() => setTheme(isDark ? 'light' : 'dark')}
-          className="flex items-center gap-3 px-3 py-2 rounded-lg text-body-md font-semibold text-text-body hover:bg-neutral-100 hover:text-text-action transition-colors w-full"
+          className={cn(
+            "flex items-center gap-3 px-3 py-2 rounded-lg text-body-md font-semibold transition-all duration-200 w-full",
+            isDark
+              ? "text-white bg-white/10 hover:bg-white/20 ring-1 ring-white/20"
+              : "text-neutral-700 bg-neutral-100 hover:bg-neutral-200 ring-1 ring-neutral-200"
+          )}
           aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
         >
           {isDark ? <IconSun /> : <IconMoon />}

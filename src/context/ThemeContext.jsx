@@ -32,15 +32,26 @@ export function ThemeProvider({ children }) {
     () => localStorage.getItem('eu-theme') || 'system'
   )
 
+  // isDark as proper React state — always in sync with the <html> class
+  const [isDark, setIsDark] = useState(() => {
+    const saved = localStorage.getItem('eu-theme') || 'system'
+    if (saved === 'dark') return true
+    if (saved === 'light') return false
+    return prefersDark()
+  })
+
   // Apply on mount and whenever theme changes
   useEffect(() => {
     applyTheme(theme)
+    setIsDark(document.documentElement.classList.contains('dark'))
 
     // When in 'system' mode, track OS preference changes live
     if (theme === 'system') {
       const mq = window.matchMedia('(prefers-color-scheme: dark)')
-      const handler = (e) =>
+      const handler = (e) => {
         document.documentElement.classList.toggle('dark', e.matches)
+        setIsDark(e.matches)
+      }
       mq.addEventListener('change', handler)
       return () => mq.removeEventListener('change', handler)
     }
@@ -50,10 +61,9 @@ export function ThemeProvider({ children }) {
     localStorage.setItem('eu-theme', t)
     setThemeRaw(t)
     applyTheme(t)
+    // Update isDark immediately so the icon swaps on the same frame
+    setIsDark(document.documentElement.classList.contains('dark'))
   }
-
-  // Derive a simple boolean for consumers
-  const isDark = document.documentElement.classList.contains('dark')
 
   return (
     <ThemeContext.Provider value={{ theme, setTheme, isDark }}>
